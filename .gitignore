@@ -8,3 +8,7 @@ test-results/
 playwright-report/
 *.log
 local-records/
+native/.build/
+native/build/
+native/Resources/dictionary.sqlite
+native/Resources/*.building

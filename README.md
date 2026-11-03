@@ -1,4 +1,14 @@
-# TransWebQuick
+# PressTrans
+
+原 TransWebQuick，现同步开发原生 macOS 应用。**原生版已内置英汉离线词典，无需 API 配置即可查询**；提供全局快捷键和辅助功能选区适配的初版，跨应用兼容性仍待授权后验收。构建与使用见 [native/README.md](native/README.md)。
+
+```sh
+bash scripts/build-native.sh
+```
+
+下文为保留的 Safari 网页实验版说明，其支持范围与原生应用分别验收。
+
+## Safari 网页实验版
 
 Safari 原地语境释义本地原型，按开发文档 v1.0 推进。
 
