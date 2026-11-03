@@ -5,6 +5,10 @@ if [[ ! -f native/Resources/dictionary.sqlite ]]; then
  python3 scripts/build-dictionary.py
 fi
 export CLANG_MODULE_CACHE_PATH="$PWD/native/.build/module-cache"
+if [[ ! -f native/Resources/PressTrans.icns || scripts/make-native-icon.swift -nt native/Resources/PressTrans.icns ]]; then
+ swift scripts/make-native-icon.swift native/.build/PressTrans.iconset
+ iconutil -c icns native/.build/PressTrans.iconset -o native/Resources/PressTrans.icns
+fi
 swift build --package-path native --disable-sandbox --cache-path "$PWD/native/.build/cache" -c release
 APP="$PWD/native/build/PressTrans.app"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
@@ -17,7 +21,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <key>CFBundleExecutable</key><string>PressTrans</string>
 <key>CFBundleIdentifier</key><string>com.presstrans.mac</string>
 <key>CFBundleName</key><string>PressTrans</string>
-<key>CFBundleVersion</key><string>1</string>
+<key>CFBundleVersion</key><string>2</string>
+<key>CFBundleIconFile</key><string>PressTrans</string>
 <key>CFBundleShortVersionString</key><string>0.2.0</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>LSUIElement</key><true/>
@@ -25,9 +30,5 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <key>NSHighResolutionCapable</key><true/>
 </dict></plist>
 PLIST
-# Only the path to the ignored local config is embedded in development builds.
-if [[ "${PRESSTRANS_DEV_CONFIG:-0}" == "1" ]]; then
- /usr/libexec/PlistBuddy -c "Add :PressTransDevelopmentConfig string $PWD/.env" "$APP/Contents/Info.plist"
-fi
-codesign --force --sign - "$APP"
+python3 scripts/sign-native.py "$APP"
 printf 'Built: %s\n' "$APP"

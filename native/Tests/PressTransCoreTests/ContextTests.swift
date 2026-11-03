@@ -1,7 +1,18 @@
+import CoreGraphics
 import Foundation
 import PressTransCore
 @main enum CoreChecks {
     static func main() async throws {
+        var gesture=PressGesture()
+        gesture.down(at:.zero,clicks:1,time:1)
+        precondition(gesture.pressure(200,time:1.1)==nil)
+        precondition(gesture.pressure(500,time:1.2)==CGPoint.zero)
+        precondition(gesture.pressure(600,time:1.3)==nil)
+        gesture.down(at:.zero,clicks:2,time:2);precondition(gesture.pressure(700,time:2.1)==nil)
+        gesture.down(at:.zero,clicks:1,time:3);gesture.move(to:CGPoint(x:30,y:0));precondition(gesture.pressure(700,time:3.1)==nil)
+        gesture.down(at:.zero,clicks:1,time:4);precondition(gesture.pressure(700,time:5)==nil)
+        gesture.down(at:.zero,clicks:1,time:6);gesture.up();precondition(gesture.pressure(700,time:6.1)==nil)
+        print("Pressure detector checks passed: light click, one-shot, multi-click, drag, hold, release")
         let text=String(repeating:"a",count:10000)+"DM limits"+String(repeating:"b",count:10000)
         let result=ContextBuilder.make(selection:"DM limits",surrounding:text,sourceApp:"Test")!
         precondition(result.context.contains("DM limits") && result.context.count==1809 && !result.limited)

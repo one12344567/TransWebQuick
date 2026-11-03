@@ -12,3 +12,4 @@ native/.build/
 native/build/
 native/Resources/dictionary.sqlite
 native/Resources/*.building
+native/.signing/
