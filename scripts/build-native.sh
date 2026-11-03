@@ -9,7 +9,11 @@ if [[ ! -f native/Resources/PressTrans.icns || scripts/make-native-icon.swift -n
  swift scripts/make-native-icon.swift native/.build/PressTrans.iconset
  iconutil -c icns native/.build/PressTrans.iconset -o native/Resources/PressTrans.icns
 fi
-swift build --package-path native --disable-sandbox --cache-path "$PWD/native/.build/cache" -c release
+if [[ "${PRESSTRANS_CAPTURE_ACCEPTANCE:-0}" == 1 ]]; then
+ swift build --package-path native --disable-sandbox --cache-path "$PWD/native/.build/cache" -c release -Xswiftc -D -Xswiftc CAPTURE_ACCEPTANCE
+else
+ swift build --package-path native --disable-sandbox --cache-path "$PWD/native/.build/cache" -c release
+fi
 APP="$PWD/native/build/PressTrans.app"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp native/.build/release/PressTrans "$APP/Contents/MacOS/PressTrans"

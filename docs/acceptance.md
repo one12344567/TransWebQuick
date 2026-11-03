@@ -79,3 +79,26 @@ M0 无跨文本节点自动扩词（手动跨标签选区可读取），无完�
 用户要求取消钥匙串弹窗，已移除供应商配置的所有 Security/Keychain API 访问。现使用用户 Application Support/PressTrans/provider.json，目录 0700、文件 0600、原子保存；已有 .env 测试密钥仅本机迁入，新版启动未再弹钥匙串密码框。代码与忽略规则扫描通过，私有配置和签名材料均未加入 Git。
 
 本机系统权限页中的旧 PressTrans 开关为开，但运行应用实际权限检查失败。用户已明确同意将旧条目重新绑定到安装版。系统 Touch ID 验证需由用户完成；在完成前，不宣称权限问题或真实重按已验收通过。
+
+## 原生全局取词与界面复验（2026-11-03）
+
+辅助功能授权已重新绑定安装版并在应用内确认有效；录屏权限经用户明确同意，已在系统与应用内确认开启。之前验证过系统查词切换前后的三个偏好键逐项恢复一致。物理压力可靠性仍须单独验收。
+
+设置重做为侧栏与原生分组表单，支持窗口缩放、Command-W、Dock 随设置窗口显示。浮窗使用 AppKit 材质、箭头与独立黄色高亮；截图检查已完成设置与预览浮窗，跨应用高亮动画仍不等于完整物理手势验收。
+
+新增不设应用白名单的 AX 文本标记、字符范围、有限文字叶节点字词边界查询，以及可选本地 OCR 回退。正式构建不包含指定应用的测试控件。因计算机工具的定向按键未触发 Carbon 全局热键、窗口操作未同步系统前台，使用 `PRESSTRANS_CAPTURE_ACCEPTANCE=1 bash scripts/build-native.sh` 的临时 UI 调用真实应用同一个 TextCapture 实现；记录以下 **接口集成测试**，不冒充物理重按端到端验收：
+
+| 真实窗口与操作 | 结果 |
+| --- | --- |
+| Safari example.com 正文未选中的 documentation | 正确单词、完整段落、bounds=true，6 ms |
+| Safari example.com 选中 documentation examples | 修复标记起点后正确短语、完整段落、bounds=true，5 ms |
+| Safari X 订阅页标题 subscription | 正确单词、标题上下文、bounds=true，13 ms |
+| Safari X 换行链接 anytime | 正确单词、所在条款段落、bounds=true，3 ms |
+| Safari X 同一链接第一行 Cancel 的测试坐标 | 未读取成功，保留为待查项 |
+| Chrome example.com 未选中 documentation | 补充字词边界适配后正确单词、完整段落、bounds=true，19 ms |
+| Chrome example.com 选中 documentation examples | 正确短语、完整段落、bounds=true，3 ms |
+| Chrome 正文上方空白区域 | 正确拒绝，没有误抓邻近文字 |
+
+本地 Vision 图片检查通过：精确识别 limits、同一行上下文、Retina 2x / 负屏幕原点坐标映射、空白拒绝。首次进程观察到 28.4 秒初始化；再次启动同样检查为 82 ms，不能视为所有设备冷启动指标。真实 Chrome 窗口截图 OCR 集成尚未通过，正在核查截图裁剪与定位；正式 UI 标为实验功能，不能宣称图片/画布已普遍稳定。截图不落盘、不上传，纯本地识别。用户已选择开启 OCR 回退。
+
+多语言提示策略、Unicode 取词、压力状态机、上下文预算、SSE、真实词典和在线失败回退/取消检查通过。之前的三次真实模型样本分别验证日语→中文、中文→英语+中文解释、中文仅释义。8 GB Intel、长时间运行、PDF/Canvas 和真实触控板全流程兼容矩阵仍未完成。

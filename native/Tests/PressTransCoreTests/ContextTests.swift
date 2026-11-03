@@ -3,6 +3,17 @@ import Foundation
 import PressTransCore
 @main enum CoreChecks {
     static func main() async throws {
+        try await checkOCR()
+        precondition(TranslationPolicy().prompt.contains("英语译文"))
+        precondition(TranslationPolicy(chineseMode:.explainOnly).prompt.contains("不要翻译成外语"))
+        precondition(TranslationPolicy(chineseTarget:.japanese).prompt.contains("日语译文"))
+        for sample in ["résumé", "中文术语", "日本語", "안녕하세요", "مرحبا", "🙂"] {
+            let match=TextTarget.range(in:sample,atUTF16:0)
+            precondition(match != nil && match!.length>0)
+        }
+        precondition(TextTarget.range(in:"hello world",atUTF16:5)==nil)
+        precondition(TextTarget.range(in:"hello",atUTF16:100)==nil)
+        print("Multilingual policy and Unicode target checks passed")
         var gesture=PressGesture()
         gesture.down(at:.zero,clicks:1,time:1)
         precondition(gesture.pressure(200,time:1.1)==nil)

@@ -28,10 +28,11 @@ import PressTransCore
     func query(detail:Bool=false) {
         guard let snapshot else { return }
         cancel(); let id=generation; loading=true; complete=false; answer=""; message=""; matchNote=""; offline=true
+        let policy=TranslationPreferences.policy
         let enabled=TranslationPreferences.onlineEnabled && Credentials.load() != nil
         let online:LookupEngine.Online?
         if enabled {
-            online = { sink in try await Translator.run(snapshot,detail:detail,onText:sink) }
+            online = { sink in try await Translator.run(snapshot,detail:detail,policy:policy,onText:sink) }
         } else { online=nil }
         task=Task { [weak self] in
             await LookupEngine.run(local:{await DictionaryStore.shared?.lookup(snapshot.selection)},online:online) { [weak self] update in
@@ -62,31 +63,30 @@ struct LookupView: View {
     var body:some View {
         VStack(alignment:.leading,spacing:0) {
             HStack(spacing:8) {
-                Image(systemName:"hand.point.up.left.fill").font(.system(size:13)).foregroundStyle(accent)
-                Text("PressTrans").font(.system(size:12,weight:.semibold)).foregroundStyle(.secondary)
+                Text(model.offline ? "英汉词典":"语境释义").font(.system(size:12,weight:.semibold)).foregroundStyle(.secondary)
                 Spacer()
-                if model.preview { Text("预览").font(.system(size:10)).foregroundStyle(.secondary) }
+                if model.preview { Text("样式预览").font(.system(size:10)).foregroundStyle(.secondary) }
                 Button(action:close) { Image(systemName:"xmark").font(.system(size:12,weight:.medium)).frame(width:26,height:26).contentShape(Rectangle()) }.buttonStyle(.plain).help("关闭 · Esc").accessibilityLabel("关闭释义")
             }
-            .padding(.bottom,18)
+            .padding(.bottom,14)
             ScrollView {
-                VStack(alignment:.leading,spacing:16) {
+                VStack(alignment:.leading,spacing:12) {
                     Text(model.selection.isEmpty ? "选中，就读懂。":model.selection)
-                        .font(.system(size:20,weight:.semibold,design:.rounded)).textSelection(.enabled).frame(maxWidth:.infinity,alignment:.leading)
+                        .font(.system(size:20,weight:.semibold)).textSelection(.enabled).frame(maxWidth:.infinity,alignment:.leading)
                     if !model.source.isEmpty {
                         HStack(spacing:5) { Image(systemName:"macwindow"); Text(model.source); if model.limited { Text("· 上下文有限") } }.font(.system(size:11)).foregroundStyle(.secondary)
                     }
                     if model.loading && model.answer.isEmpty {
                         HStack(spacing:10) { ProgressView().controlSize(.small); Text("正在查询…").font(.system(size:13)).foregroundStyle(.secondary) }.padding(.vertical,18)
                     }
-                    if !model.matchNote.isEmpty { Text(model.matchNote).font(.system(size:11)).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true) }
                     if !model.answer.isEmpty {
                         let parts=AnswerParts.split(model.answer)
                         VStack(alignment:.leading,spacing:12) {
-                            Text(parts.meaning).font(.system(size:21,weight:.medium)).foregroundStyle(.primary).lineSpacing(4)
+                            Text(parts.meaning).font(.system(size:20,weight:.medium)).foregroundStyle(.primary).lineSpacing(4)
                             if !parts.explanation.isEmpty { Text(parts.explanation).font(.system(size:14)).foregroundStyle(.secondary).lineSpacing(5) }
                         }.textSelection(.enabled).frame(maxWidth:.infinity,alignment:.leading)
                     }
+                    if !model.matchNote.isEmpty { Text(model.matchNote).font(.system(size:11)).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true) }
                     if !model.message.isEmpty && !model.loading { Label(model.message,systemImage:"info.circle").font(.system(size:12)).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true) }
                     if !model.context.isEmpty {
                         VStack(alignment:.leading,spacing:10) {
@@ -98,16 +98,15 @@ struct LookupView: View {
                     }
                 }.padding(.trailing,4)
             }.scrollIndicators(.hidden)
-            Divider().opacity(0.5).padding(.vertical,14)
+            Divider().opacity(0.5).padding(.vertical,12)
             HStack {
-                Text(model.loading ? "在线增强中…":(model.offline ? "离线 · 英 → 中":"英 → 中")).font(.system(size:11)).foregroundStyle(.tertiary)
+                Text(model.loading ? "在线增强中…":(model.offline ? "离线 · 英 → 中":"多语言 · 语境释义")).font(.system(size:11)).foregroundStyle(.tertiary)
                 Spacer()
                 Button { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(model.answer,forType:.string) } label:{ Image(systemName:"doc.on.doc") }.buttonStyle(.plain).disabled(!model.complete).help("复制释义").accessibilityLabel("复制释义")
                 if !model.preview && model.snapshot != nil && TranslationPreferences.onlineEnabled && Credentials.load() != nil {
                     Button(model.offline ? "重试在线":(model.complete ? "展开解释":"重试")) { model.query(detail:model.complete && !model.offline) }.buttonStyle(.bordered).controlSize(.small).disabled(model.loading)
                 }
             }
-        }.padding(22).frame(width:408,height:model.panelHeight).background(.regularMaterial).clipShape(RoundedRectangle(cornerRadius:22,style:.continuous))
-        .overlay(RoundedRectangle(cornerRadius:22).strokeBorder(.white.opacity(0.2),lineWidth:1))
+        }.padding(20).frame(width:408,height:model.panelHeight).background(Color.clear)
     }
 }
