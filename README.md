@@ -46,3 +46,5 @@ npm test
 - M4：24 项用例、36 次语义评审、30 次冷请求与 10 次缓存请求统计。
 
 当前不需要 Xcode；Safari 扩展打包属于原型验收后的独立阶段。API 密钥不得写入源码、浏览器存储或提交 Git。
+
+若本机已有 Google Chrome，可用 `PLAYWRIGHT_CHANNEL=chrome npm test`，无需另行下载测试浏览器。自动测试使用临时浏览器配置，不使用日常浏览器资料。
