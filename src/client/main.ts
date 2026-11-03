@@ -1,3 +1,4 @@
+import { renderAnswer } from './answer.ts';
 import { extract } from './context.ts';
 import { lookup } from './transport.ts';
 import type { Lookup } from '../shared/protocol.ts';
@@ -36,9 +37,10 @@ async function query(nextMode: Lookup['mode']) {
  try {
   await lookup({...snapshot,requestId:current,mode},controller.signal,(event,value)=>{
    if(requestId!==current || popup.hidden) return;
-   if(event==='delta') { text+=value.text; $('answer').textContent=text; $('query-status').textContent='正在生成…'; position(); }
+   if(event==='delta') { text+=value.text; renderAnswer($('answer'),text); $('query-status').textContent='正在生成…'; position(); }
    if(event==='done') {
     if(!text.trim()) throw Error('INVALID_OUTPUT');
+    renderAnswer($('answer'),text,true);
     completedText=text; $('query-status').textContent=value.cached?'已完成 · 本机缓存':'已完成';
     $<HTMLButtonElement>('detail').disabled=mode==='detail'; $<HTMLButtonElement>('copy').disabled=false;
     metrics.push({requestId:current,mode,...value}); if(metrics.length>200) metrics.shift();

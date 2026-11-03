@@ -51,3 +51,22 @@ test('late response cannot replace a newer selection',async({page})=>{
  await select('#sample-two');await expect(page.locator('#answer')).toHaveText('NEW');
  release();await expect(page.locator('#answer')).toHaveText('NEW');
 });
+test('direct meaning and explanation have distinct visual hierarchy',async({page},testInfo)=>{
+ await page.route('**/api/lookup',async route=>{
+  const {requestId}=route.request().postDataJSON();
+  const chunks=['那是值得坚持到底的立场。\r','\n\r\n','“hill to die on” 指愿意为之坚持的立场。<script>不会执行</script>'];
+  await route.fulfill({contentType:'text/event-stream',body:chunks.map(text=>`event: delta\ndata: ${JSON.stringify({requestId,text})}\n\n`).join('')+`event: done\ndata: ${JSON.stringify({requestId,finishReason:'stop'})}\n\n`});
+ });
+ await page.goto('/reading-lab');
+ await page.locator('#sample-three').scrollIntoViewIfNeeded();
+ await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+ await page.locator('#sample-three').evaluate(el=>{const r=document.createRange();r.selectNodeContents(el);getSelection()!.removeAllRanges();getSelection()!.addRange(r);});
+ await page.keyboard.press('Alt+KeyT');
+ await expect(page.locator('#query-status')).toHaveText('已完成');
+ await expect(page.locator('.answer-meaning')).toHaveText('那是值得坚持到底的立场。');
+ await expect(page.locator('.answer-meaning')).toHaveCSS('font-size','18px');
+ await expect(page.locator('.answer-explanation')).toContainText('“hill to die on”');
+ await expect(page.locator('.answer-explanation')).toHaveCSS('font-size','14px');
+ await expect(page.locator('#answer script')).toHaveCount(0);
+ await page.screenshot({path:testInfo.outputPath('answer-hierarchy.png')});
+});
