@@ -1,50 +1,62 @@
 # TransWebQuick
 
-Safari 原地语境释义原型。按《Safari 重按语境释义原型开发文档》v1.0 推进。
+Safari 原地语境释义本地原型，按开发文档 v1.0 推进。
 
-当前阶段：M0 真实 Force Touch 验证工具已实现，**真机验收待执行**。没有接入模型，没有生成真实释义。按需求第 4、15 节，M0 通过后再推进 M1–M4。快捷键和合成事件不能证明真实重按有效。
+当前：真实单词重按和跨标签 `DM limits` 选区已获用户真机确认；本地阅读页、上下文提取、DeepSeek 流式释义、展开解释、复制、重试及语境缓存已实现。完整 M4 验收尚未完成，不是已打包的 Safari 扩展。
 
-## 本地运行
+## 启动
 
-使用 Node.js 24（本机已验证 24.14.0）。所有依赖安装在项目目录。
+Node.js 24（已验证 24.14.0）：
 
 ```sh
 npm ci
+cp .env.example .env   # 仅首次；已有 .env 时不要覆盖
+# 在本机编辑 .env，填写 DEEPSEEK_API_KEY
 npm run dev
 ```
 
-Safari 打开 http://127.0.0.1:8787/reading-lab 。替代端口：`PORT=8788 npm run dev`。
-服务仅监听 127.0.0.1，检查 Host / Origin，不开放 CORS，不访问模型或保存查询历史。
+用 Safari 打开 http://127.0.0.1:8787/reading-lab 。端口冲突可运行 `PORT=8788 npm run dev`。改代码后重启开发服务会重新构建前端。
 
-## M0 验证
+`.env` 已被 Git 忽略，密钥只由服务端加载。不要提交密钥、上传本地测试记录或把真实密钥粘进前端。
 
-1. 保持「本页重按释义」开启。在正文单词上真实重按，再选中 `DM limits` 重按。
-2. 查看是否只出现自定义浮窗，事件日志是否包含 `isTrusted: true` 的 `webkitmouseforcewillbegin`、`webkitmouseforcedown`，且前者 `defaultPrevented: true`。
-3. 连续轻点、拖选、轻点链接应正常；按钮、输入框、可编辑区重按不接管。
-4. 旧选区留在另一段时重按新词；浮窗应选择新词。按 Esc、点击外部、滚动或切走标签应关闭。
-5. 关闭开关，对比系统原生查询行为；填写设备、Safari 完整版本、触控板和系统查询设置，以及是否出现系统浮窗。
-6. 点击「导出验证记录」，保存 JSON 后交给开发者核对。可信事件和人工观察需一起判断，页面不会自动宣布 M0 通过。
+## 使用
 
-Option+T：选中文本后调试浮窗（非真实重按）；若与 Safari 快捷键冲突，使用正文下方调试按钮。不会拦截输入区域的快捷键。
+在阅读区域重按单词，或拖选短语后重按。上方宣传标题保留系统查询；按钮、输入框和编辑器不接管。
 
-## 开发检查
+- 首次查询：简短释义逐步显示。
+- 参考上下文：查看本次请求使用的本地原文片段。
+- 展开解释：复用原上下文快照，主动发起详细释义请求。
+- 复制：仅复制已完成的释义，不读取剪贴板。
+- Esc、点击外部、外部滚动、切换标签、目标移除或文字改变：关闭并取消当前请求。
+- 重试：只由用户主动点击触发；中断结果显示“未完成”，不缓存。
+- Option+T 或选区调试按钮：辅助调试，不能代替真实 Force Touch 验收。
+
+默认隐藏事件诊断，访问 `/reading-lab?debug=1` 显示事件日志。人工观察区可导出设备信息、手势事件及成功请求计时，不导出正文或密钥。真实测试内容默认仅留在被忽略的 `local-records/`。
+
+## 本机服务
+
+同一服务提供静态页面与 `POST /api/lookup`，只绑定 127.0.0.1，校验 Host / Origin，不开放 CORS。请求为 JSON，最大 64 KiB；选区最多 1000 Unicode 码点，来源最多 6 个 / 5000 码点。白名单字段构造模型输入，客户端不能指定系统提示词、上游地址或密钥。
+
+使用 DeepSeek 官方 HTTPS `/chat/completions`，默认 `deepseek-flash`，显式关闭 thinking，brief/detail 输出预算 256/512 tokens。没有密钥时仍能浏览页面，查询给出配置提示。
+
+SSE 返回 meta、delta、done 或 error。缓存键包括上下文、模式、版本和模型配置；内存 LRU 上限 200 条、TTL 30 分钟，只缓存完整成功结果。首字、闲置、总超时分别为 15、10、30 秒。流中断与截断均不视为成功。
+
+## 测试
 
 ```sh
 npm run check
+npx playwright install chromium  # 首次，无现成 Chrome 时
 npm test
+# 已安装 Google Chrome 时可直接：
+PLAYWRIGHT_CHANNEL=chrome npm test
 ```
 
-自动测试使用 Chromium 验证逻辑和交互，不等同于 Safari 硬件验收。首次测试安装浏览器：`npx playwright install chromium`。
+自动测试中的界面模型响应为模拟数据，不消耗 API 额度；浏览器使用独立临时配置。Chromium 测试不能替代 Safari 真机手势验收。
 
-目录：`src/client` 交互与选区，`src/server` 本机服务，`tests` 自动测试，`docs` 验收与里程碑。`dist` 自动构建，不提交。
+代码目录：`src/client` 页面交互和上下文，`src/server` 服务与模型适配，`src/shared` 协议和流解析，`tests` 自动测试，`fixtures` 独立语义答案，`docs` 验收状态。
 
-## 后续阶段
+## 剩余验收与限制
 
-- M1：完整阅读实验页、语义上下文、浮窗和调试面板。
-- M2：DeepSeek 本机转发、非思考模式、流式响应和主动展开；届时才需要本机配置 `DEEPSEEK_API_KEY`。
-- M3：语境缓存、取消并发、预算、安全与错误处理。
-- M4：24 项用例、36 次语义评审、30 次冷请求与 10 次缓存请求统计。
+见 `docs/acceptance.md`。当前不支持 iframe、Shadow DOM、Canvas、图片 OCR、PDF 或跨应用查询；不会全局修改系统词典。长段落采用局部裁剪，通用提取策略仍需更多复杂 DOM 评估；单词跨文本节点自动扩词尚未实现，可手动选择完整短语。详细展开和非原生缩放下的布局需 Safari 实测。429 显示限流提示，尚未实现 Retry-After 倒计时。
 
-当前不需要 Xcode；Safari 扩展打包属于原型验收后的独立阶段。API 密钥不得写入源码、浏览器存储或提交 Git。
-
-若本机已有 Google Chrome，可用 `PLAYWRIGHT_CHANNEL=chrome npm test`，无需另行下载测试浏览器。自动测试使用临时浏览器配置，不使用日常浏览器资料。
+按用户 2026-11-03 指示，本轮不追查上游网络延迟；保留超时处理，速度指标暂缓验收。完整 24 项用例、36 次语义评审和 30 冷 / 10 热性能样本尚未完成。Safari 扩展与 X 网站适配属于后续阶段。

@@ -8,9 +8,9 @@
   },
   "scripts": {
     "build": "esbuild src/client/main.ts --bundle --format=esm --target=safari17 --outfile=dist/client.js",
-    "dev": "npm run build && node --experimental-strip-types src/server/app.ts",
+    "dev": "npm run build && node --env-file-if-exists=.env --experimental-strip-types src/server/app.ts",
     "check": "tsc --noEmit",
-    "test": "playwright test"
+    "test": "node --experimental-strip-types --test tests/*.test.ts && playwright test"
   },
   "devDependencies": {
     "@playwright/test": "1.64.1",

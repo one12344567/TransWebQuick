@@ -18,7 +18,13 @@ async function force(page: Page, selector: string) {
     return begin.defaultPrevented;
   });
 }
-test.beforeEach(async ({ page }) => { await page.goto('/reading-lab'); });
+test.beforeEach(async ({ page }) => {
+  await page.route('**/api/lookup', async route => {
+    const {requestId}=route.request().postDataJSON();
+    await route.fulfill({contentType:'text/event-stream',body:`event: delta\ndata: ${JSON.stringify({requestId,text:'测试释义'})}\n\nevent: done\ndata: ${JSON.stringify({requestId,finishReason:'stop'})}\n\n`});
+  });
+  await page.goto('/reading-lab');
+});
 test('ordinary click does not query; keyboard reads cross-tag selection and Escape closes', async ({ page }) => {
   await page.locator('#sample-one').click();
   await expect(page.getByRole('dialog')).toBeHidden();

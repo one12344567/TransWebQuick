@@ -1,0 +1,14 @@
+[
+ {"id":"T01","selection":"DM limits","region":"Plus membership benefits","expect":"私信额度，不编造具体数值","exclude":"Basic、Pro 和侧栏的数据建模定义"},
+ {"id":"T02","selection":"DM","region":"Data modeling in practice","expect":"数据建模"},
+ {"id":"T03","selection":"DM limits","region":"membership","expect":"上下文不含侧栏"},
+ {"id":"T04","selection":"DM limits","expect":"跨 span/em 完整保留"},
+ {"id":"T05","expect":"跨行选区仅触发一次，锚点靠近按压点"},
+ {"id":"T06","selection":"limits","expect":"无选区重按只取单词，无标点"},
+ {"id":"T07","selection":"That’s a hill to die on","region":"quote","expect":"附带明确父帖资料，不读取相邻帖"},
+ {"id":"T08","selection":"That’s a hill to die on","expect":"坚持某立场的习语，不作字面解释"},
+ {"id":"T09","selection":"shared pool","region":"table","expect":"带当前行列标题，排除其他列"},
+ {"id":"T10","selection":"rate limit","region":"Managing service traffic","expect":"包含本节标题和当前段落，不发送全文"},
+ {"id":"T11","selection":"DM limits","expect":"原文无额度数字时说明不足"},
+ {"id":"T12","expect":"超出预算时保留完整选区，标记裁剪"}
+]
