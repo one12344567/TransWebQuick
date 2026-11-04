@@ -97,7 +97,7 @@ import PressTransCore
                 }
                 guard !Task.isCancelled, NSWorkspace.shared.frontmostApplication?.processIdentifier == result.processID else{return}
                 state.captureStatus="\(result.context.sourceApp) · \(result.context.limited ? "仅目标文字":"含上下文") · \(Int(Date().timeIntervalSince(began)*1000)) ms\n\(result.context.selection.prefix(80))"
-                panel.model.show(result.context);panel.show(anchor:result.anchor)
+                panel.model.show(result.context);panel.show(anchor:result.anchor,highlightRects:result.highlightRects)
             } catch {
                 guard !Task.isCancelled else{return}
                 state.captureStatus="\(name)：\(error.localizedDescription)"

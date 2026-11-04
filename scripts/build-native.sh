@@ -25,9 +25,9 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <key>CFBundleExecutable</key><string>PressTrans</string>
 <key>CFBundleIdentifier</key><string>com.presstrans.mac</string>
 <key>CFBundleName</key><string>PressTrans</string>
-<key>CFBundleVersion</key><string>5</string>
+<key>CFBundleVersion</key><string>6</string>
 <key>CFBundleIconFile</key><string>PressTrans</string>
-<key>CFBundleShortVersionString</key><string>0.4.1</string>
+<key>CFBundleShortVersionString</key><string>0.5.0</string>
 <key>CFBundleDevelopmentRegion</key><string>en</string>
 <key>CFBundleLocalizations</key><array><string>en</string><string>zh-Hans</string><string>zh-Hant</string></array>
 <key>CFBundlePackageType</key><string>APPL</string>

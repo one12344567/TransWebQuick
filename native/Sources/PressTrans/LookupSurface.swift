@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import PressTransCore
 
 /// Native blur and a bounded reading tint share the same pointer-shaped surface.
 @MainActor final class LookupSurface:NSView {
@@ -60,32 +61,56 @@ import SwiftUI
         window?.invalidateShadow()
     }
     override func viewDidChangeEffectiveAppearance() {super.viewDidChangeEffectiveAppearance();needsLayout=true}
+    func animateReveal() {
+        guard let layer else{return}
+        layer.removeAnimation(forKey:"lookupReveal")
+        let pivot=CGPoint(x:pointerX ?? bounds.midX,y:pointsUp ? bounds.maxY:bounds.minY)
+        let x=pivot.x-layer.anchorPoint.x*bounds.width,y=pivot.y-layer.anchorPoint.y*bounds.height
+        var start=CATransform3DMakeTranslation(x,y,0)
+        start=CATransform3DScale(start,0.96,0.96,1)
+        start=CATransform3DTranslate(start,-x,-y,0)
+        let spring=CASpringAnimation(keyPath:"transform")
+        spring.fromValue=NSValue(caTransform3D:start);spring.toValue=NSValue(caTransform3D:CATransform3DIdentity)
+        spring.mass=1;spring.stiffness=320;spring.damping=34;spring.initialVelocity=0;spring.duration=0.4
+        layer.add(spring,forKey:"lookupReveal")
+    }
 }
 
 /// A click-through visual overlay. It neither edits nor selects text in the originating app.
 @MainActor final class WordHighlight {
     private let window:NSPanel
     private var generation=UUID()
+    private let fill=CAShapeLayer()
     init() {
         window=NSPanel(contentRect:.zero,styleMask:[.borderless,.nonactivatingPanel],backing:.buffered,defer:false)
         window.isOpaque=false;window.backgroundColor = .clear;window.hasShadow=false
         window.ignoresMouseEvents=true;window.hidesOnDeactivate=false;window.isReleasedWhenClosed=false
         window.level = .floating;window.collectionBehavior=[.canJoinAllSpaces,.fullScreenAuxiliary]
-        let view=NSView();view.wantsLayer=true;view.layer?.cornerRadius=4
-        view.layer?.backgroundColor=NSColor(calibratedRed:1,green:0.88,blue:0.04,alpha:0.42).cgColor
-        view.layer?.borderWidth=0.6;view.layer?.borderColor=NSColor(calibratedRed:0.78,green:0.56,blue:0,alpha:0.25).cgColor
+        let view=NSView();view.wantsLayer=true
+        fill.fillColor=NSColor(calibratedRed:1,green:0.86,blue:0.08,alpha:0.38).cgColor
+        fill.strokeColor=NSColor(calibratedRed:0.8,green:0.6,blue:0.04,alpha:0.18).cgColor;fill.lineWidth=0.5
+        view.layer?.addSublayer(fill)
         view.setAccessibilityElement(false);window.contentView=view
     }
-    func show(rect:CGRect) {
+    func show(rects:[CGRect]) {
         generation=UUID()
-        guard rect.width.isFinite,rect.height.isFinite,rect.width>1,rect.height>4,rect.width<800,rect.height<100 else{hide();return}
-        window.setFrame(rect.insetBy(dx:-3,dy:-1),display:false)
+        let aligned=rects.prefix(24).compactMap {rect->CGRect? in
+            guard rect.width>1,rect.height>4,rect.width<1600,rect.height<60,
+                  let screen=NSScreen.screens.first(where:{$0.frame.intersects(rect)}) else{return nil}
+            return HighlightGeometry.aligned(rect.intersection(screen.frame),scale:screen.backingScaleFactor)
+        }
+        guard let first=aligned.first else{hide();return}
+        let frame=aligned.dropFirst().reduce(first){$0.union($1)}
+        window.setFrame(frame,display:false)
+        let path=CGMutablePath()
+        for rect in aligned {path.addRoundedRect(in:rect.offsetBy(dx:-frame.minX,dy:-frame.minY).insetBy(dx:0.25,dy:0.25),cornerWidth:min(2,rect.height*0.1),cornerHeight:min(2,rect.height*0.1))}
+        CATransaction.begin();CATransaction.setDisableActions(true)
+        fill.frame=CGRect(origin:.zero,size:frame.size);fill.path=path
+        CATransaction.commit()
         window.alphaValue=0;window.orderFrontRegardless()
         guard !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else{window.alphaValue=1;return}
-        NSAnimationContext.runAnimationGroup{ctx in ctx.duration=0.11;window.animator().alphaValue=1}
-        let spring=CASpringAnimation(keyPath:"transform.scale")
-        spring.fromValue=0.95;spring.toValue=1;spring.mass=1;spring.stiffness=420;spring.damping=30;spring.duration=0.24
-        window.contentView?.layer?.add(spring,forKey:"pressHighlight")
+        // Geometry stays fixed throughout the reveal, so the original glyphs never drift relative to the tint.
+        NSAnimationContext.runAnimationGroup{ctx in ctx.duration=0.14;ctx.timingFunction=CAMediaTimingFunction(name:.easeOut);window.animator().alphaValue=1}
     }
     func hide() {
         let current=UUID();generation=current

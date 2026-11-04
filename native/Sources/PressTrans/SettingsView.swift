@@ -3,9 +3,9 @@ import SwiftUI
 import PressTransCore
 
 private enum SettingsPage:String,CaseIterable,Identifiable {
-    case general="通用",translation="翻译",service="服务",appearance="界面"
+    case general="通用",translation="翻译",service="服务",appearance="界面",usage="用量"
     var id:String {rawValue}
-    var symbol:String {switch self {case .general:"slider.horizontal.3";case .translation:"character.bubble";case .service:"externaldrive.connected.to.line.below";case .appearance:"paintpalette"}}
+    var symbol:String {switch self {case .general:"slider.horizontal.3";case .translation:"character.bubble";case .service:"externaldrive.connected.to.line.below";case .appearance:"paintpalette";case .usage:"chart.bar.xaxis"}}
 }
 private final class SettingsState:ObservableObject {
     @Published var page:SettingsPage = .translation
@@ -81,7 +81,7 @@ private struct SidebarMaterial:NSViewRepresentable {
                 }.padding(.horizontal,28).padding(.top,22).padding(.bottom,16)
                 ScrollView {
                     VStack(alignment:.leading,spacing:24) {
-                        switch state.page {case .general:general;case .translation:translation;case .service:service;case .appearance:AppearanceView(showPopover:preview)}
+                        switch state.page {case .general:general;case .translation:translation;case .service:service;case .appearance:AppearanceView(showPopover:preview);case .usage:UsageView()}
                     }.frame(maxWidth:580,alignment:.leading).padding(.horizontal,28).padding(.top,6).padding(.bottom,28).frame(maxWidth:.infinity)
                 }.scrollIndicators(.automatic)
             }.background(Color(nsColor:paper ? .textBackgroundColor:.windowBackgroundColor))

@@ -24,7 +24,7 @@ bash scripts/build-native.sh
 - `took off` → `take off`；`turned it down` → `turn down`；`looked after` → `look after`；`recieve` 显示 `receive` 拼写建议。实际匹配词条可见。
 - 最多分析前 24 个词、展示 5 个条目；单条释义展示上限 1800 字符。复杂句回退到部分词组/单词释义，明确标注不是整句翻译。
 - 离线词典不承诺语境消歧，不能可靠理解讽刺、梗或未收录习语。模板仅排版已有释义，不生成新的翻译结论。
-- 可选在线增强需主动开启；配置位于“服务 → 配置…”。默认 DeepSeek，支持编辑兼容服务的 Base URL 和模型。离线结果先显示，在线成功后替换；认证失败、限流、断流或超时恢复完整离线结果。
+- 可选在线增强需主动开启；配置位于“服务 → 配置…”。默认 DeepSeek，支持编辑兼容服务的 Base URL 和模型。已配置在线服务时，主区域直接显示加载状态和 AI 回答；回答完成后再读取离线词典，作为“解释 → 词典参考”中的折叠参考。认证失败、限流、断流或超时才回退到词典；关闭在线服务时直接查词典。
 - 个人 API 配置只是开发/高级入口。面向普通用户的免配置云服务尚未建设，未来需要自有后端、账户/额度与成本控制；不得将任何测试密钥写入客户端分发。
 
 ## 隐私与资源管理
@@ -70,7 +70,7 @@ PRESSTRANS_DICTIONARY="$PWD/native/Resources/dictionary.sqlite" native/.build/re
 
 ## 全局取词、OCR 与界面更新
 
-设置分为通用、翻译、服务、界面四栏；手动查询从通用页或菜单打开。窗口可调整大小，支持 Command-W；只在设置窗口可见时显示 Dock。浮窗采用 AppKit popover 材质、指向目标的箭头与黄色点击穿透高亮，支持减少动态效果。
+设置分为通用、翻译、服务、界面、用量五栏；手动查询从通用页或菜单打开。窗口可调整大小，支持 Command-W；只在设置窗口可见时显示 Dock。浮窗采用 AppKit popover 材质、指向目标的箭头与黄色点击穿透高亮，支持减少动态效果。
 
 直接取词按能力路由，不按应用包名限制：首先尝试 WebKit/Chromium 常见的 AX 文本标记接口，再尝试字符范围接口；从命中或焦点节点沿父链有限查找，绝不遍历整个文档。标记范围先读取长度，目标最多 2000 UTF-16 单元，上下文最多 3000，再经公共预算限制；指针查询必须命中真实字词边界，空白不能吸附到附近单词。最终选区仍限制为 1000 Unicode 码点。浏览器标记接口并非所有应用都支持，需保留回退。
 
@@ -97,3 +97,13 @@ Services shows a compact local demonstration of contextual translation or screen
 Lookups always start compact: original, first meaning and copy. Explain expands the already-received answer without another request. Context has its own disclosure. The expanded More menu retains copying the original/full answer/context and requesting further online explanation or retrying. Error text remains visible when no answer is available. Streaming text does not animate a window resize on every chunk; manual expansion respects Reduce Motion.
 
 Service fields are in a Configure sheet; cancelling discards the draft. A blank key preserves the existing key only when the endpoint matches exactly. Changing endpoints still requires a new key.
+
+## AI-first lookup and token history (0.5)
+
+Online lookup never flashes a dictionary result before the AI response. Dictionary lookup runs after the complete response, appears only under the collapsed Dictionary Reference section, and becomes the main answer only when online lookup fails. Closing the panel cancels the request; previews remain local and unmetered. The service illustration now uses “You made my day.” to avoid confusing a preset translation with a network error.
+
+Usage shows today/all-time reported tokens and individual requests (time, provider, model, brief/detail, completion status, input/output, cached input and reasoning when provided). Requests are identified before sending and updated by ID on completion, failure or cancellation. Missing usage is labelled unknown and excluded from totals; it is never presented as zero. Interrupted streams may incur provider charges without a final usage report. Counts start with this version; old queries cannot be reconstructed.
+
+Only metadata and counters are stored in `~/Library/Application Support/PressTrans/usage.sqlite` (0600); no selected text, context, answers, keys or endpoint URLs. SQLite uses a 256 KB page cache and history reads at most 50 rows per page. A 1,000-record local fixture occupied 184,320 bytes, including indexes. Record size varies with provider/model names. The view displays actual file size. This is usage tracking, not a currency billing estimate.
+
+Highlight geometry no longer has a fixed 3 pt outer inset or a scaling transform. It snaps outward to physical pixels; bounded character-range queries separate visual lines where the host exposes glyph bounds. Pointer ranges that do not actually contain the pointer are rejected. The popup reveals around its arrow tip with a damped spring and short fade instead of simultaneous window movement and centre scaling. This approximates a native feel; no claim is made that it uses Apple's private Look Up animation parameters or that every application returns accurate text bounds.

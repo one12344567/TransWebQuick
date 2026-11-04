@@ -17,23 +17,29 @@ import PressTransCore
     @Published var contextExpanded=false
     @Published var offline=false
     @Published var matchNote=""
+    @Published var dictionaryText=""
+    @Published var dictionaryNote=""
+    @Published var dictionaryExpanded=false
+    @Published var usageRecord:UsageRecord?
     private var task:Task<Void,Never>?
     private var generation=UUID()
     var snapshot:CapturedContext?
     func cancel() { generation=UUID(); task?.cancel(); task=nil; loading=false }
-    func clear() { cancel(); selection=""; answer=""; context=""; source=""; snapshot=nil; message=""; complete=false; expanded=false; contextExpanded=false; preview=false; offline=false; matchNote="" }
+    func clear() { cancel(); selection=""; answer=""; context=""; source=""; snapshot=nil; message=""; complete=false; expanded=false; contextExpanded=false; preview=false; offline=false; matchNote="";dictionaryText="";dictionaryNote="";dictionaryExpanded=false;usageRecord=nil }
     func show(_ value:CapturedContext) {
         clear(); snapshot=value; selection=value.selection; context=value.context; source=value.sourceApp; limited=value.limited
         query()
     }
     func query(detail:Bool=false) {
         guard let snapshot else { return }
-        cancel(); let id=generation; loading=true; complete=false; answer=""; message=""; matchNote=""; offline=true
+        cancel(); let id=generation; loading=true; complete=false; answer=""; message=""; matchNote=""; offline=false;dictionaryText="";dictionaryNote="";dictionaryExpanded=false;usageRecord=nil
         let policy=TranslationPreferences.policy
         let enabled=TranslationPreferences.onlineEnabled && Credentials.load() != nil
         let online:LookupEngine.Online?
         if enabled {
-            online = { sink in try await Translator.run(snapshot,detail:detail,policy:policy,onText:sink) }
+            online = { [weak self] sink in try await Translator.run(snapshot,detail:detail,policy:policy,onText:sink,onRecord:{[weak self] record in
+                await MainActor.run { [weak self] in guard let self,self.generation==id else{return};self.usageRecord=record}
+            }) }
         } else { online=nil }
         task=Task { [weak self] in
             let supported=TranslationPreferences.supportsOffline
@@ -43,6 +49,7 @@ import PressTransCore
                     self.answer=update.text; self.matchNote = update.offline ? (supported ? L(update.note):L("离线词典仅支持英语到简体中文；当前语言需要在线服务。")):""
                     self.message = !supported && update.offline && !update.loading ? L("当前语言的在线释义不可用，请检查服务配置或稍后重试。") : L(update.message)
                     self.loading=update.loading; self.complete=update.complete; self.offline=update.offline
+                    self.dictionaryText=update.reference?.text ?? "";self.dictionaryNote=update.reference.map{L($0.note)} ?? ""
                 }
             }
             guard let self, self.generation==id else {return}
@@ -91,6 +98,15 @@ struct LookupView: View {
                     if model.expanded {
                         if !parts.explanation.isEmpty {Text(parts.explanation).font(.system(size:max(12,PopupAppearance.size*0.7),design:PopupAppearance.design)).foregroundStyle(.secondary).lineSpacing(4).textSelection(.enabled).frame(maxWidth:.infinity,alignment:.leading)}
                         if !model.matchNote.isEmpty {Text(model.matchNote).font(.system(size:11)).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)}
+                        if !model.dictionaryText.isEmpty {
+                            Button {withAnimation(reduceMotion ? nil:.easeInOut(duration:0.18)){model.dictionaryExpanded.toggle()}} label:{
+                                HStack(spacing:6){Text(L("词典参考"));Image(systemName:"chevron.right").font(.system(size:9,weight:.semibold)).rotationEffect(.degrees(model.dictionaryExpanded ? 90:0));Spacer()}.font(.system(size:12)).foregroundStyle(.secondary).contentShape(Rectangle())
+                            }.buttonStyle(.plain).accessibilityValue(model.dictionaryExpanded ? L("已展开"):L("已收起"))
+                            if model.dictionaryExpanded {
+                                Text(model.dictionaryText).font(.system(size:12)).foregroundStyle(.secondary).lineSpacing(4).textSelection(.enabled).frame(maxWidth:.infinity,alignment:.leading)
+                                Text(model.dictionaryNote).font(.system(size:11)).foregroundStyle(.tertiary).fixedSize(horizontal:false,vertical:true)
+                            }
+                        }
                         if !model.context.isEmpty {
                             Button {withAnimation(reduceMotion ? nil:.easeInOut(duration:0.18)){model.contextExpanded.toggle()}} label:{
                                 HStack(spacing:6){Text(L("上下文"));Image(systemName:"chevron.right").font(.system(size:9,weight:.semibold)).rotationEffect(.degrees(model.contextExpanded ? 90:0));Spacer()}.font(.system(size:12)).foregroundStyle(.secondary).contentShape(Rectangle())
@@ -98,6 +114,10 @@ struct LookupView: View {
                             if model.contextExpanded {
                                 if !model.source.isEmpty && !model.preview {Text(model.source + (model.limited ? " · " + L("上下文有限"):"")).font(.system(size:11)).foregroundStyle(.tertiary)}
                                 Text(model.context).font(.system(size:12)).foregroundStyle(.secondary).lineSpacing(4).textSelection(.enabled).frame(maxWidth:.infinity,alignment:.leading)}
+                        }
+                        if let record=model.usageRecord {
+                            Text(record.usage.map{L("本次用量")+" · \($0.total.formatted()) tokens · "+L("输入")+" \($0.input.formatted()) / "+L("输出")+" \($0.output.formatted())"} ?? L("本次用量未返回"))
+                                .font(.system(size:10)).foregroundStyle(.tertiary).fixedSize(horizontal:false,vertical:true)
                         }
                     }
                     if !model.message.isEmpty && !model.loading && (model.expanded || model.answer.isEmpty) {
@@ -108,7 +128,7 @@ struct LookupView: View {
             Divider().opacity(0.4).padding(.top,12).padding(.bottom,10)
             HStack(spacing:12) {
                 Button {
-                    withAnimation(reduceMotion ? nil:.easeInOut(duration:0.18)){model.expanded.toggle();if !model.expanded {model.contextExpanded=false}}
+                    withAnimation(reduceMotion ? nil:.easeInOut(duration:0.18)){model.expanded.toggle();if !model.expanded {model.contextExpanded=false;model.dictionaryExpanded=false}}
                 } label:{HStack(spacing:5){Text(model.expanded ? L("收起"):L("解释"));Image(systemName:"chevron.right").font(.system(size:9,weight:.medium)).rotationEffect(.degrees(model.expanded ? -90:0))}}
                     .buttonStyle(.plain).disabled(model.answer.isEmpty).accessibilityValue(model.expanded ? L("已展开"):L("已收起"))
                 if model.offline && !model.answer.isEmpty {Text(L("词典")).font(.system(size:10)).foregroundStyle(.tertiary)}

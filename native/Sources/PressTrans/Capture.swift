@@ -2,7 +2,7 @@ import AppKit
 import ApplicationServices
 import PressTransCore
 
-struct CaptureResult { let context: CapturedContext; let anchor: CGRect?; let processID: pid_t }
+struct CaptureResult { let context: CapturedContext; let anchor: CGRect?; let processID: pid_t; var highlightRects:[CGRect]=[] }
 enum CaptureFailure: LocalizedError {
     case permission, noSelection, secure, unsupported
     var errorDescription: String? {
@@ -83,7 +83,7 @@ final class TextCapture {
             guard let argument=AXValueCreate(.cfRange,&range),let box=rect(element,argument),box.width>0,box.height>0,
                   box.insetBy(dx:-1,dy:-1).contains(point),let word,
                   let context=ContextBuilder.make(selection:word,surrounding:text,sourceApp:appName) else{return}
-            found=CaptureResult(context:context,anchor:box,processID:processID);stop=true
+            found=CaptureResult(context:context,anchor:box,processID:processID,highlightRects:lineRects(element,range:range,text:word,fallback:box));stop=true
         }
         return found
     }
@@ -91,6 +91,21 @@ final class TextCapture {
         guard let value=parameter(element,kAXBoundsForRangeParameterizedAttribute,range),CFGetTypeID(value)==AXValueGetTypeID() else{return nil}
         var rect=CGRect.zero
         return AXValueGetValue(value as! AXValue,.cgRect,&rect) ? rect:nil
+    }
+    private static func lineRects(_ element:AXUIElement,range:CFRange,text:String,fallback:CGRect?)->[CGRect] {
+        // Bound cross-process calls. If the app cannot supply glyph geometry, avoid a guessed multi-line box.
+        guard text.utf16.count<=128,range.length==text.utf16.count else{return fallback.map{[$0]} ?? []}
+        let deadline=Date().addingTimeInterval(0.06)
+        var boxes:[CGRect]=[],valid=true
+        text.enumerateSubstrings(in:text.startIndex..<text.endIndex,options:.byComposedCharacterSequences){_,part,_,stop in
+            guard Date()<deadline else{valid=false;stop=true;return}
+            if text[part].allSatisfy(\.isWhitespace){return}
+            let relative=NSRange(part,in:text)
+            var glyph=CFRange(location:range.location+relative.location,length:relative.length)
+            guard let argument=AXValueCreate(.cfRange,&glyph),let box=rect(element,argument),box.width>0,box.height>0 else{valid=false;stop=true;return}
+            boxes.append(box)
+        }
+        return valid && !boxes.isEmpty ? HighlightGeometry.lines(boxes):fallback.map{[$0]} ?? []
     }
     // Safari/WebKit and Chromium expose page text as opaque text markers, not CFRange.
     // Keep markers inside the query; never serialize them or scan the document tree.
@@ -129,7 +144,7 @@ final class TextCapture {
             for name in ["AXLeftWordTextMarkerRangeForTextMarker","AXRightWordTextMarkerRangeForTextMarker"] {
                 if let range=parameter(element,name,hit),let word=text(range,limit:2000),
                    let rect=bounds(range),rect.insetBy(dx:-1,dy:-1).contains(point) {
-                    selected=word;anchor=rect;marker=hit;break
+                    selected=word;anchor=rect;marker=MarkerBridge.start(range) ?? hit;break
                 }
             }
         }
@@ -143,7 +158,19 @@ final class TextCapture {
             }
         }
         guard let context=ContextBuilder.make(selection:selected,surrounding:surrounding,sourceApp:appName) else{return nil}
-        return CaptureResult(context:context,anchor:anchor,processID:processID)
+        var fragments=anchor.map{[$0]} ?? []
+        // Engines exposing both marker and numeric ranges can provide tighter glyph geometry.
+        if let marker,let index=parameter(element,"AXIndexForTextMarker",marker) as? NSNumber,index.intValue>=0,
+           let startRange=parameter(element,"AXTextMarkerRangeForUIElement",element),let elementStart=MarkerBridge.start(startRange),
+           let startIndex=parameter(element,"AXIndexForTextMarker",elementStart) as? NSNumber,index.intValue>=startIndex.intValue {
+            // Only use a numeric range when its text and bounds match the captured word exactly.
+            var numeric=CFRange(location:index.intValue-startIndex.intValue,length:selected.utf16.count)
+            if let argument=AXValueCreate(.cfRange,&numeric),parameter(element,kAXStringForRangeParameterizedAttribute,argument) as? String == selected,
+               let numericBox=rect(element,argument),anchor?.contains(numericBox)==true {
+                fragments=lineRects(element,range:numeric,text:selected,fallback:anchor)
+            }
+        }
+        return CaptureResult(context:context,anchor:anchor,processID:processID,highlightRects:fragments)
     }
     private static func captureElement(_ focused:AXUIElement,processID:pid_t,appName:String,point:CGPoint?) throws -> CaptureResult {
         if (value(focused, kAXSubroleAttribute) as? String) == kAXSecureTextFieldSubrole { throw CaptureFailure.secure }
@@ -200,7 +227,9 @@ final class TextCapture {
                 if AXValueGetValue(result as! AXValue, .cgRect, &rect), rect.width > 0 { anchor = rect }
             }
         }
-        return CaptureResult(context: context, anchor: anchor, processID: processID)
+        if let point,let anchor,!anchor.insetBy(dx:-1,dy:-1).contains(point) {throw CaptureFailure.unsupported}
+        let fragments=hasRange ? lineRects(focused,range:range,text:selected,fallback:anchor):[]
+        return CaptureResult(context: context, anchor: anchor, processID: processID,highlightRects:fragments)
     }
 }
 

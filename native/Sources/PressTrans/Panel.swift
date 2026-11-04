@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import Combine
 import PressTransCore
+import PressTransCore
 
 final class LookupPanel:NSPanel {
     override var canBecomeKey:Bool { true }
@@ -38,6 +39,9 @@ final class LookupPanel:NSPanel {
             result+=20
             if !parts.explanation.isEmpty {result+=14+height(parts.explanation,PopupAppearance.nsFont(size:max(12,PopupAppearance.size*0.7)),spacing:4)}
             if !model.matchNote.isEmpty {result+=14+height(model.matchNote,.systemFont(ofSize:11))}
+            if !model.dictionaryText.isEmpty {result+=28}
+            if model.dictionaryExpanded {result+=28+height(model.dictionaryText,.systemFont(ofSize:12),spacing:4)+height(model.dictionaryNote,.systemFont(ofSize:11))}
+            if model.usageRecord != nil {result+=40}
             if model.contextExpanded && !model.source.isEmpty && !model.preview {result+=28}
             if !model.context.isEmpty {result+=28}
             if model.contextExpanded {result+=14+height(model.context,.systemFont(ofSize:12),spacing:4)}
@@ -48,7 +52,7 @@ final class LookupPanel:NSPanel {
     }
     private func screenAnchor()->CGRect? {
         guard let anchor,let primary=NSScreen.screens.first else{return nil}
-        return CGRect(x:anchor.minX,y:primary.frame.maxY-anchor.maxY,width:anchor.width,height:anchor.height)
+        return HighlightGeometry.appKitRect(anchor,primaryTop:primary.frame.maxY)
     }
     private func targetFrame() -> NSRect {
         let area=screenAnchor() ?? NSRect(origin:NSEvent.mouseLocation,size:.zero)
@@ -67,7 +71,7 @@ final class LookupPanel:NSPanel {
         let animate = lastExpanded != model.expanded || !model.loading;lastExpanded=model.expanded
         model.panelHeight=height
         if animate && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
-            NSAnimationContext.runAnimationGroup { ctx in ctx.duration=0.18;panel.animator().setFrame(targetFrame(),display:true) }
+            NSAnimationContext.runAnimationGroup { ctx in ctx.duration=0.22;ctx.timingFunction=CAMediaTimingFunction(controlPoints:0.2,0.8,0.2,1);panel.animator().setFrame(targetFrame(),display:true) }
         } else {panel.setFrame(targetFrame(),display:true)}
     }
     init() {
@@ -101,31 +105,31 @@ final class LookupPanel:NSPanel {
         })
         observers.append(NotificationCenter.default.addObserver(forName:NSApplication.didChangeScreenParametersNotification,object:nil,queue:.main){[weak self] _ in Task { @MainActor in self?.hide() }})
     }
-    func show(anchor:CGRect?=nil) {
+    func show(anchor:CGRect?=nil,highlightRects:[CGRect]=[]) {
         showTask?.cancel();visibility=UUID()
         self.anchor=anchor
         model.panelHeight=desiredHeight();lastExpanded=model.expanded
         if let area=screenAnchor() {
             let bounds=(NSScreen.screens.first(where:{$0.frame.intersects(area)}) ?? NSScreen.main!).visibleFrame
             placedBelow=area.minY-bounds.minY >= min(400,model.panelHeight)+20
-            highlight.show(rect:area)
+            let fragments=highlightRects.isEmpty ? [area]:highlightRects.map{HighlightGeometry.appKitRect($0,primaryTop:NSScreen.screens.first?.frame.maxY ?? 0)}
+            highlight.show(rects:fragments)
         } else {placedBelow=true;highlight.hide()}
         let target=targetFrame(), reduce=NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         panel.orderOut(nil);panel.alphaValue=0
-        panel.setFrame(target.offsetBy(dx:0,dy:reduce ? 0:(placedBelow ? 4:-4)),display:false)
+        panel.setFrame(target,display:false)
+        surface.layoutSubtreeIfNeeded()
         let current=visibility
         showTask=Task { [weak self] in
-            if !reduce && anchor != nil {try? await Task.sleep(nanoseconds:55_000_000)}
+            if !reduce && anchor != nil {try? await Task.sleep(nanoseconds:35_000_000)}
             guard let self,!Task.isCancelled,self.visibility==current else{return}
             if self.model.preview {self.panel.makeKeyAndOrderFront(nil)} else {self.panel.orderFrontRegardless()}
             NSAnimationContext.runAnimationGroup({ctx in
-                ctx.duration=reduce ? 0:0.21;ctx.timingFunction=CAMediaTimingFunction(controlPoints:0.16,1,0.3,1)
-                self.panel.animator().setFrame(target,display:true);self.panel.animator().alphaValue=1
+                ctx.duration=reduce ? 0:0.16;ctx.timingFunction=CAMediaTimingFunction(name:.easeOut)
+                self.panel.animator().alphaValue=1
             },completionHandler:nil)
             if !reduce {
-                let spring=CASpringAnimation(keyPath:"transform.scale")
-                spring.fromValue=0.975;spring.toValue=1;spring.mass=1;spring.stiffness=380;spring.damping=34;spring.duration=0.26
-                self.surface.layer?.add(spring,forKey:"lookupReveal")
+                self.surface.animateReveal()
             }
         }
     }

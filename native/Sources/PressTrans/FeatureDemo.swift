@@ -58,8 +58,8 @@ struct FeatureDemo:View {
         switch kind {
         case .online:
             VStack(alignment:.leading,spacing:6) {
-                Text("The server is").font(.system(size:13))
-                Text("down.").font(.system(size:16,weight:.medium))
+                Text("You made my").font(.system(size:13))
+                Text("day.").font(.system(size:16,weight:.medium))
                     .padding(.horizontal,4).background(finished ? Color.yellow.opacity(0.28):.clear,in:RoundedRectangle(cornerRadius:3))
             }
         case .ocr:
@@ -80,8 +80,8 @@ struct FeatureDemo:View {
         VStack(alignment:.leading,spacing:5) {
             switch kind {
             case .online:
-                Text(finished ? L("服务器暂时无法访问。"):"down").font(.system(size:14,weight:finished ? .medium:.regular))
-                if !finished {Text(L("向下；往下")).font(.system(size:12)).foregroundStyle(.secondary)}
+                Text(finished ? L("你让我一整天都很开心。"):"day").font(.system(size:14,weight:finished ? .medium:.regular))
+                if !finished {Text(L("一天；白天")).font(.system(size:12)).foregroundStyle(.secondary)}
             case .ocr:
                 if finished {Text("Welcome").font(.system(size:11)).foregroundStyle(.secondary);Text(L("欢迎")).font(.system(size:16,weight:.medium))}
                 else {Text(L("图片文字不可直接选中")).font(.system(size:12)).foregroundStyle(.secondary)}

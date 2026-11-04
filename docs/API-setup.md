@@ -48,6 +48,8 @@
 
 ## 排查
 
+“用量”页从 0.5 版起记录每次在线调用，展开浮窗也可看到本次总量。输入、输出及缓存命中来自服务商返回的 `usage`，不会额外发起统计请求。实现同时处理 [DeepSeek 的最后一个内容块](https://api-docs.deepseek.com/api/create-chat-completion/)和 [OpenAI 的独立 usage 块](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create)。请求启用 `stream_options.include_usage`，自定义服务需支持该兼容参数。断流、取消或服务未返回用量时标为“未返回”，不代表免费；以服务商账单为准。
+
 - 保存失败：检查 HTTPS 地址、模型名和非空 Key，地址中不要带 `?` 参数。
 - 无在线结果：确认「在线释义」已开启，密钥已经保存，账户有额度且模型 ID 可用。
 - 401 / 403：核对 Key、所属服务与模型权限；429：检查额度或稍后重试。
