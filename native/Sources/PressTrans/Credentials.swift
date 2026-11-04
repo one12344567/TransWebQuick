@@ -1,7 +1,8 @@
 import Foundation
+import PressTransCore
 
 enum Credentials {
-    private struct Configuration:Codable {let apiKey:String}
+    private struct Configuration:Codable {let apiKey:String;let endpoint:String?}
     static var directory:URL {
         FileManager.default.urls(for:.applicationSupportDirectory,in:.userDomainMask)[0].appendingPathComponent("PressTrans",isDirectory:true)
     }
@@ -9,9 +10,10 @@ enum Credentials {
     static func load()->String? {
         guard let data=try? Data(contentsOf:file),data.count<8192,
               let configuration=try? JSONDecoder().decode(Configuration.self,from:data),!configuration.apiKey.isEmpty else{return nil}
+        guard (configuration.endpoint ?? "https://api.deepseek.com/chat/completions") == ServiceEndpoint.completionURL(ServicePreferences.baseURL)?.absoluteString else{return nil}
         return configuration.apiKey
     }
-    static func save(_ key:String)->Bool {
+    static func save(_ key:String,endpoint:String = "https://api.deepseek.com/chat/completions")->Bool {
         let cleaned=key.trimmingCharacters(in:.whitespacesAndNewlines)
         guard !cleaned.isEmpty,cleaned.count<=4096,!cleaned.contains("\n"),!cleaned.contains("\r") else{return false}
         do {
@@ -22,7 +24,7 @@ enum Credentials {
             defer {try? FileManager.default.removeItem(at:temporary)}
             guard FileManager.default.createFile(atPath:temporary.path,contents:nil,attributes:[.posixPermissions:0o600]) else{return false}
             let handle=try FileHandle(forWritingTo:temporary)
-            do {try handle.write(contentsOf:JSONEncoder().encode(Configuration(apiKey:cleaned)));try handle.synchronize();try handle.close()}
+            do {try handle.write(contentsOf:JSONEncoder().encode(Configuration(apiKey:cleaned,endpoint:endpoint)));try handle.synchronize();try handle.close()}
             catch {try? handle.close();throw error}
             if FileManager.default.fileExists(atPath:file.path) {_ = try FileManager.default.replaceItemAt(file,withItemAt:temporary)}
             else {try FileManager.default.moveItem(at:temporary,to:file)}

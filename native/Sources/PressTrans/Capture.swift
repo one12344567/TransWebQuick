@@ -7,10 +7,10 @@ enum CaptureFailure: LocalizedError {
     case permission, noSelection, secure, unsupported
     var errorDescription: String? {
         switch self {
-        case .permission: return "先为 PressTrans 开启辅助功能权限，然后回到原应用选中文字。"
-        case .noSelection: return "没有读到选中文字。请先选中一个词或句子，再按 ⌥⇧T。"
-        case .secure: return "此处是受保护的输入区域，无法查询。"
-        case .unsupported: return "未能直接读取指针下的文字。可在设置中开启屏幕识字，或选中文字后按 ⌥⇧T。"
+        case .permission: return L("先为 PressTrans 开启辅助功能权限，然后回到原应用选中文字。")
+        case .noSelection: return L("没有读到选中文字。请先选中一个词或句子，再按 ⌥⇧T。")
+        case .secure: return L("此处是受保护的输入区域，无法查询。")
+        case .unsupported: return L("未能直接读取指针下的文字。可在设置中开启屏幕识字，或选中文字后按 ⌥⇧T。")
         }
     }
 }

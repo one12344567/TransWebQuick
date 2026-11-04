@@ -28,7 +28,7 @@ final class LookupPanel:NSPanel {
             return ceil((text as NSString).boundingRect(with:NSSize(width:368,height:2000),options:[.usesLineFragmentOrigin,.usesFontLeading],attributes:[.font:font]).height)
         }
         let parts=AnswerParts.split(model.answer)
-        var result:CGFloat=132 + height(model.selection.isEmpty ? "选中，就读懂。":model.selection,.systemFont(ofSize:20,weight:.semibold))
+        var result:CGFloat=132 + height(model.selection.isEmpty ? L("选中，就读懂。"):model.selection,.systemFont(ofSize:20,weight:.semibold))
         if !model.source.isEmpty {result+=30}
         if model.loading && model.answer.isEmpty {result+=58}
         result+=height(parts.meaning,.systemFont(ofSize:20,weight:.medium))*1.15

@@ -79,3 +79,9 @@ Option-Shift-P 查询指针下的词，与重按共用路径；Option-Shift-T �
 可选“取词失败时使用屏幕识字”默认关闭。仅主动指针查询且 AX 读取失败时，ScreenCaptureKit 截取指针附近至多 640×260 点的可见区域；Vision 在本机识别，选择包围指针的字词，附近上下文只使用同一识别行。图片不落盘、不上传，不创建持续录制流。拒绝安全输入框，不使用 OCR 绕过权限拒绝。开启在线释义时，识别出的目标和目标行仍会按在线设置发送给 DeepSeek。OCR 不能保证所有语言、低清文字、竖排或复杂排版正确。
 
 在线释义支持外语→中文；中文默认先给英语译文再用中文解释，可选择其他目标语言或仅中文释义。代码/符号优先解释实际作用。当前 DeepSeek 官方 deepseek-flash 支持图片输入（见官方 Vision 文档），本版选择本地 OCR + 文本释义，不发送屏幕图片。
+
+## Languages and online services (0.3)
+
+App UI: English, Simplified Chinese, Traditional Chinese, or system default. Translation and explanation languages are independent, with automatic source detection and custom language names. The bundled offline dictionary remains English → Simplified Chinese only.
+
+Online service defaults to DeepSeek and accepts editable OpenAI Chat Completions compatible Base URLs and model IDs. See [API setup guide](../docs/API-setup.md) for provider presets, language settings, data handling and troubleshooting. Keys are bound to the saved endpoint; redirects are rejected. Presets are not a claim of live paid-account validation.

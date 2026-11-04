@@ -4,9 +4,15 @@ import PressTransCore
 @main enum CoreChecks {
     static func main() async throws {
         try await checkOCR()
-        precondition(TranslationPolicy().prompt.contains("英语译文"))
-        precondition(TranslationPolicy(chineseMode:.explainOnly).prompt.contains("不要翻译成外语"))
-        precondition(TranslationPolicy(chineseTarget:.japanese).prompt.contains("日语译文"))
+        let policy=TranslationPolicy(targetLanguage:"Japanese",explanationLanguage:"French",sameLanguageTranslate:true,alternateLanguage:"Korean").prompt
+        precondition(policy.contains("Japanese") && policy.contains("French") && policy.contains("Korean"))
+        precondition(policy.contains("first translate it into alternateLanguage"))
+        precondition(TranslationPolicy().prompt.contains("do not force a translation"))
+        precondition(ServiceEndpoint.completionURL("https://api.deepseek.com/")?.absoluteString == "https://api.deepseek.com/chat/completions")
+        precondition(ServiceEndpoint.completionURL("https://host.example/v1/chat/completions/")?.path == "/v1/chat/completions")
+        precondition(ServiceEndpoint.completionURL("https://host.example/compatible-mode/v1")?.path == "/compatible-mode/v1/chat/completions")
+        precondition(ServiceEndpoint.completionURL("http://127.0.0.1:1234/v1") != nil)
+        for invalid in ["http://example.com/v1","https://key@example.com","https://example.com?key=secret","file:///tmp/key",""] {precondition(ServiceEndpoint.completionURL(invalid)==nil)}
         for sample in ["résumé", "中文术语", "日本語", "안녕하세요", "مرحبا", "🙂"] {
             let match=TextTarget.range(in:sample,atUTF16:0)
             precondition(match != nil && match!.length>0)

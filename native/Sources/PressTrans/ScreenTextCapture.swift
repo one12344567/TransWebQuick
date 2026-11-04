@@ -6,9 +6,9 @@ import PressTransCore
 enum ScreenTextFailure:LocalizedError {
     case permission, unavailable, noText
     var errorDescription:String? {switch self {
-    case .permission:"此处需要屏幕识字。请在隐私与服务中允许屏幕录制；图片仅在本机识别。"
-    case .unavailable:"屏幕识字需要 macOS 15.2 或更新版本。"
-    case .noText:"指针下没有识别到清晰文字。请将指针放在字词上，或选中文字后查询。"
+    case .permission:L("此处需要屏幕识字。请在隐私与服务中允许屏幕录制；图片仅在本机识别。")
+    case .unavailable:L("屏幕识字需要 macOS 15.2 或更新版本。")
+    case .noText:L("指针下没有识别到清晰文字。请将指针放在字词上，或选中文字后查询。")
     }}
 }
 /// One-shot OCR only. No recording stream, screenshot files, image upload, or background polling.
@@ -30,7 +30,7 @@ actor ScreenTextCapture {
         do {result=try autoreleasepool {try ScreenTextRecognizer.recognize(image:image,region:region,point:point)}}
         catch {throw ScreenTextFailure.noText}
         try Task.checkCancellation()
-        guard let context=ContextBuilder.make(selection:result.word,surrounding:result.line,sourceApp:appName+" · 屏幕识字") else{throw ScreenTextFailure.noText}
+        guard let context=ContextBuilder.make(selection:result.word,surrounding:result.line,sourceApp:appName+L(" · 屏幕识字")) else{throw ScreenTextFailure.noText}
         return CaptureResult(context:context,anchor:result.rect,processID:processID)
     }
 }

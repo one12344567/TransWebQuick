@@ -17,6 +17,7 @@ import PressTransCore
     var hotkey:EventHotKeyRef?, pointerHotkey:EventHotKeyRef?, eventHandler:EventHandlerRef?
     var captureTask:Task<Void,Never>?
     let state=ApplicationState()
+    var languageObserver:NSObjectProtocol?
     var permissionTimer:Timer?
     var terminateSignal:DispatchSourceSignal?
     func applicationDidFinishLaunching(_ notification:Notification) {
@@ -36,16 +37,16 @@ import PressTransCore
         terminateSignal?.setEventHandler{NSApp.terminate(nil)};terminateSignal?.resume()
         let mainMenu=NSMenu(), appItem=NSMenuItem(), appMenu=NSMenu()
         mainMenu.addItem(appItem);appItem.submenu=appMenu
-        let settingsItem=NSMenuItem(title:"PressTrans 设置…",action:#selector(settings),keyEquivalent:",");settingsItem.target=self;appMenu.addItem(settingsItem)
-        let closeItem=NSMenuItem(title:"关闭窗口",action:#selector(closeSettings),keyEquivalent:"w");closeItem.target=self;appMenu.addItem(closeItem)
-        appMenu.addItem(.separator());appMenu.addItem(NSMenuItem(title:"退出 PressTrans",action:#selector(NSApplication.terminate(_:)),keyEquivalent:"q"));NSApp.mainMenu=mainMenu
+        let settingsItem=NSMenuItem(title:L("PressTrans 设置…"),action:#selector(settings),keyEquivalent:",");settingsItem.target=self;appMenu.addItem(settingsItem)
+        let closeItem=NSMenuItem(title:L("关闭窗口"),action:#selector(closeSettings),keyEquivalent:"w");closeItem.target=self;appMenu.addItem(closeItem)
+        appMenu.addItem(.separator());appMenu.addItem(NSMenuItem(title:L("退出 PressTrans"),action:#selector(NSApplication.terminate(_:)),keyEquivalent:"q"));NSApp.mainMenu=mainMenu
         item=NSStatusBar.system.statusItem(withLength:NSStatusItem.variableLength)
-        item.button?.image=NSImage(systemSymbolName:"hand.point.up.left",accessibilityDescription:"PressTrans")
+        item.button?.image=PressIcon.menuImage()
         let menu=NSMenu()
-        let title=NSMenuItem(title:"PressTrans · 按压翻译",action:nil,keyEquivalent:""); title.isEnabled=false; menu.addItem(title)
-        add(menu,"翻译选中文字  ⌥⇧T",#selector(lookup)); add(menu,"手动查询…",#selector(manual)); menu.addItem(.separator())
-        add(menu,"预览原生浮窗",#selector(preview)); add(menu,"设置与使用指南…",#selector(settings)); menu.addItem(.separator()); add(menu,"退出 PressTrans",#selector(quit))
-        add(menu,"隐藏菜单栏图标",#selector(hideMenuBar))
+        let title=NSMenuItem(title:L("PressTrans · 按压翻译"),action:nil,keyEquivalent:""); title.isEnabled=false; menu.addItem(title)
+        add(menu,L("翻译选中文字  ⌥⇧T"),#selector(lookup)); add(menu,L("手动查询…"),#selector(manual)); menu.addItem(.separator())
+        add(menu,L("预览原生浮窗"),#selector(preview)); add(menu,L("设置与使用指南…"),#selector(settings)); menu.addItem(.separator()); add(menu,L("退出 PressTrans"),#selector(quit))
+        add(menu,L("隐藏菜单栏图标"),#selector(hideMenuBar))
         item.menu=menu;item.isVisible=state.menuVisible
         var spec=EventTypeSpec(eventClass:OSType(kEventClassKeyboard),eventKind:UInt32(kEventHotKeyPressed))
         InstallEventHandler(GetApplicationEventTarget(),{ _,event,userData in
@@ -57,20 +58,27 @@ import PressTransCore
             Task { @MainActor in if pointer {owner.performLookup(at:NSEvent.mouseLocation)} else {owner.lookup()} }; return noErr
         },1,&spec,Unmanaged.passUnretained(self).toOpaque(),&eventHandler)
         let status=RegisterEventHotKey(UInt32(kVK_ANSI_T),UInt32(optionKey|shiftKey),EventHotKeyID(signature:0x5054524e,id:1),GetApplicationEventTarget(),0,&hotkey)
-        if status != noErr { panel.model.message="⌥⇧T 已被其他应用占用，请从菜单栏发起查询。" }
+        if status != noErr { panel.model.message=L("⌥⇧T 已被其他应用占用，请从菜单栏发起查询。") }
         RegisterEventHotKey(UInt32(kVK_ANSI_P),UInt32(optionKey|shiftKey),EventHotKeyID(signature:0x5054524e,id:2),GetApplicationEventTarget(),0,&pointerHotkey)
+        languageObserver=NotificationCenter.default.addObserver(forName:.interfaceLanguageChanged,object:nil,queue:.main){[weak self] _ in
+            Task { @MainActor in
+                func refresh(_ menu:NSMenu?) {for item in menu?.items ?? [] {item.title=L(item.title);refresh(item.submenu)}}
+                refresh(NSApp.mainMenu);refresh(self?.item.menu)
+                self?.panel.model.clear()
+            }
+        }
         settings()
     }
     func add(_ menu:NSMenu,_ title:String,_ action:Selector) { let entry=NSMenuItem(title:title,action:action,keyEquivalent:"");entry.target=self;menu.addItem(entry) }
     @objc func lookup() {performLookup(at:nil)}
     func performLookup(at point:CGPoint?) {
         state.refreshPermission()
-        state.captureStatus="正在获取查询目标…"
+        state.captureStatus=L("正在获取查询目标…")
         captureTask?.cancel()
         guard let foreground=NSWorkspace.shared.frontmostApplication, foreground.bundleIdentifier != Bundle.main.bundleIdentifier else {
             panel.model.clear();panel.model.message=CaptureFailure.noSelection.localizedDescription;panel.show();return
         }
-        let pid=foreground.processIdentifier, name=foreground.localizedName ?? "当前应用"
+        let pid=foreground.processIdentifier, name=foreground.localizedName ?? L("当前应用")
         let began=Date()
         let axPoint=point.map{CGPoint(x:$0.x,y:(NSScreen.screens.first?.frame.maxY ?? 0)-$0.y)}
         let screen=point.flatMap{location in NSScreen.screens.first(where:{$0.frame.contains(location)})}.map{screen in
@@ -107,7 +115,7 @@ import PressTransCore
             window?.title="PressTrans";window?.isReleasedWhenClosed=false;window?.delegate=self;window?.center()
         }
         window?.contentView=NSHostingView(rootView:SettingsView(appState:state,menuVisibility:{[weak self] visible in self?.setMenuVisible(visible)},manualMode:manual,changeMode:{[weak self] in self?.showWindow(manual:!manual)},preview:{[weak self] in self?.hideSettings();self?.preview()},translate:{[weak self] text in
-            guard let self,let context=ContextBuilder.make(selection:text,surrounding:nil,sourceApp:"手动输入") else{return}
+            guard let self,let context=ContextBuilder.make(selection:text,surrounding:nil,sourceApp:L("手动输入")) else{return}
             self.hideSettings();self.panel.model.show(context);self.panel.show()
         }))
         NSApp.setActivationPolicy(.regular)
