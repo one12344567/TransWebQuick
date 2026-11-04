@@ -1,9 +1,11 @@
 import AppKit
 import SwiftUI
 
-/// A single native backdrop, including the pointer: no opaque SwiftUI fill over the blur.
+/// Native blur and a bounded reading tint share the same pointer-shaped surface.
 @MainActor final class LookupSurface:NSView {
     private let effect=NSVisualEffectView()
+    private let tone=NSView()
+    private let toneMask=CAShapeLayer()
     private let outline=CAShapeLayer()
     private let innerRim=CAShapeLayer()
     private let host:NSHostingView<LookupView>
@@ -15,7 +17,8 @@ import SwiftUI
         super.init(frame:.zero)
         wantsLayer=true
         effect.material = .popover;effect.blendingMode = .behindWindow;effect.state = .active
-        addSubview(effect);addSubview(host)
+        tone.wantsLayer=true;tone.layer?.mask=toneMask
+        addSubview(effect);addSubview(tone);addSubview(host)
         layer?.addSublayer(outline);layer?.addSublayer(innerRim)
         outline.fillColor=NSColor.clear.cgColor;innerRim.fillColor=NSColor.clear.cgColor
         outline.lineWidth=0.65;innerRim.lineWidth=0.5
@@ -25,7 +28,9 @@ import SwiftUI
     override func layout() {
         super.layout()
         let inset:CGFloat=pointerX == nil ? 0:Self.tip
-        effect.frame=bounds
+        let desiredAppearance=PopupAppearance.style == "graphite" ? NSAppearance(named:.darkAqua):nil
+        if appearance?.name != desiredAppearance?.name {appearance=desiredAppearance}
+        effect.frame=bounds;tone.frame=bounds
         host.frame=NSRect(x:0,y:pointsUp ? 0:inset,width:bounds.width,height:bounds.height-inset)
         let body=NSRect(x:0.5,y:pointsUp ? 0.5:inset+0.5,width:bounds.width-1,height:bounds.height-inset-1)
         let shape=NSBezierPath(roundedRect:body,xRadius:14,yRadius:14)
@@ -41,6 +46,11 @@ import SwiftUI
         }
         let mask=NSImage(size:bounds.size,flipped:false){_ in NSColor.black.setFill();shape.fill();return true}
         effect.maskImage=mask
+        toneMask.path=shape.cgPath
+        let reduce=NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency || NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast
+        let darkSurface=effectiveAppearance.bestMatch(from:[.darkAqua,.aqua]) == .darkAqua
+        let color=darkSurface ? NSColor(calibratedWhite:0.16,alpha:1):NSColor(calibratedWhite:0.985,alpha:1)
+        tone.layer?.backgroundColor=color.withAlphaComponent(PopupAppearance.style == "glass" && !reduce ? PopupAppearance.opacity:1).cgColor
         // The OS supplies the material and window shadow. The subtle rim adds definition on white pages.
         let dark=effectiveAppearance.bestMatch(from:[.darkAqua,.aqua]) == .darkAqua
         outline.path=CGPath(roundedRect:body,cornerWidth:14,cornerHeight:14,transform:nil)

@@ -3,9 +3,9 @@ import SwiftUI
 import PressTransCore
 
 private enum SettingsPage:String,CaseIterable,Identifiable {
-    case general="通用",translation="翻译",service="服务"
+    case general="通用",translation="翻译",service="服务",appearance="界面"
     var id:String {rawValue}
-    var symbol:String {switch self {case .general:"slider.horizontal.3";case .translation:"character.bubble";case .service:"externaldrive.connected.to.line.below"}}
+    var symbol:String {switch self {case .general:"slider.horizontal.3";case .translation:"character.bubble";case .service:"externaldrive.connected.to.line.below";case .appearance:"paintpalette"}}
 }
 private final class SettingsState:ObservableObject {
     @Published var page:SettingsPage = .translation
@@ -16,6 +16,10 @@ private final class SettingsState:ObservableObject {
     @Published var advanced=false
     @Published var editService=false
     @Published var manual=false
+    @Published var permissions=false
+    @Published var gestureDemo=false
+    @Published var demoKind:FeatureDemoKind = .online
+    @Published var demoReplay=0
     @Published var configured=Credentials.load() != nil
     @Published var ocr=ScreenTextCapture.enabled
     @Published var target=TranslationPreferences.target
@@ -40,12 +44,12 @@ private struct SidebarMaterial:NSViewRepresentable {
     var menuVisibility:(Bool)->Void
     var manualMode:Bool;var changeMode:()->Void;var preview:()->Void;var translate:(String)->Void
     @StateObject private var state=SettingsState()
-    // Both directions remain available. A is the initial comparison view, not a final design choice.
+    // A is the default; appearance choices live in the dedicated visual settings page.
     @AppStorage("settingsStyle") private var style="glass"
     @AppStorage("interfaceLanguage") private var interfaceLanguage="system"
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var paper:Bool {style == "paper"}
-    private var accent:Color {paper ? .primary:Color(red:0.28,green:0.40,blue:0.32)}
+    private var accent:Color {Color.accentColor}
     var body:some View {
         HStack(spacing:0) {
             if !paper {
@@ -74,13 +78,10 @@ private struct SidebarMaterial:NSViewRepresentable {
                         }
                     } else {Text(L(state.page.rawValue)).font(.system(size:23,weight:.semibold))}
                     Spacer(minLength:12)
-                    Picker(L("界面风格"),selection:$style) {
-                        Text("A").tag("glass");Text("B").tag("paper")
-                    }.pickerStyle(.segmented).labelsHidden().frame(width:76).help(L("A 原生轻透 · B 安静书页"))
                 }.padding(.horizontal,28).padding(.top,22).padding(.bottom,16)
                 ScrollView {
                     VStack(alignment:.leading,spacing:24) {
-                        switch state.page {case .general:general;case .translation:translation;case .service:service}
+                        switch state.page {case .general:general;case .translation:translation;case .service:service;case .appearance:AppearanceView(showPopover:preview)}
                     }.frame(maxWidth:580,alignment:.leading).padding(.horizontal,28).padding(.top,6).padding(.bottom,28).frame(maxWidth:.infinity)
                 }.scrollIndicators(.automatic)
             }.background(Color(nsColor:paper ? .textBackgroundColor:.windowBackgroundColor))
@@ -89,6 +90,8 @@ private struct SidebarMaterial:NSViewRepresentable {
         .onAppear{state.manual=manualMode}
         .sheet(isPresented:$state.editService,onDismiss:{state.key=""}){serviceEditor}
         .sheet(isPresented:$state.manual){manual}
+        .sheet(isPresented:$state.permissions){permissions}
+        .sheet(isPresented:$state.gestureDemo){VStack(spacing:18){FeatureDemo(kind:.force);Button(L("完成")){state.gestureDemo=false}.keyboardShortcut(.cancelAction)}.padding(24).frame(width:450)}
     }
     private func note(_ text:String)->some View {
         Text(L(text)).font(.system(size:12)).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true).lineSpacing(3)
@@ -106,18 +109,18 @@ private struct SidebarMaterial:NSViewRepresentable {
     private var general:some View {
         Group {
             group {
-                row {HStack {Text(L("界面语言"));Spacer();Picker(L("界面语言"),selection:$interfaceLanguage) {
+                row {HStack {Text(L("界面语言"));Spacer();GlassMenuPicker(title:L("界面语言"),value:interfaceLanguage == "system" ? L("跟随系统") : interfaceLanguage == "en" ? "English" : interfaceLanguage == "zh-Hant" ? "繁體中文":"简体中文",selection:$interfaceLanguage) {
                     Text(L("跟随系统")).tag("system");Text("English").tag("en");Text("简体中文").tag("zh-Hans");Text("繁體中文").tag("zh-Hant")
                 }.labelsHidden().frame(width:200).onChange(of:interfaceLanguage){_,_ in NotificationCenter.default.post(name:.interfaceLanguageChanged,object:nil)}}}
                 rule
-                row {HStack {Text(L("显示菜单栏图标"));Spacer();Toggle(L("显示菜单栏图标"),isOn:Binding(get:{appState.menuVisible},set:{menuVisibility($0)})).labelsHidden().toggleStyle(.switch).controlSize(.small)}}
+                row {HStack {Text(L("显示菜单栏图标"));Spacer();Toggle(L("显示菜单栏图标"),isOn:Binding(get:{appState.menuVisible},set:{menuVisibility($0)})).labelsHidden().toggleStyle(.switch).controlSize(.small).padding(.leading,12).frame(width:200,alignment:.leading)}}
             }
             group {
-                row {HStack {Text(L("触控板重按"));Spacer();Picker(L("触控板重按"),selection:Binding(get:{appState.forceEnabled},set:{appState.setForce($0)})) {Text(L("系统查词")).tag(false);Text("PressTrans").tag(true)}.labelsHidden().frame(width:200)}}
+                row {HStack {Text(L("触控板重按"));Spacer();GlassMenuPicker(title:L("触控板重按"),value:appState.forceEnabled ? "PressTrans":L("系统查词"),selection:Binding(get:{appState.forceEnabled},set:{appState.setForce($0)})) {Text(L("系统查词")).tag(false);Text("PressTrans").tag(true)}.labelsHidden().frame(width:200)}}
                 rule
-                row {HStack {Text(L("查询选中文字"));Spacer();keycap("⌥ ⇧ T")}}
+                row {HStack {Text(L("查询选中文字"));Spacer();keycap("⌥ ⇧ T").padding(.leading,12).frame(width:200,alignment:.leading)}}
                 rule
-                row {HStack {Text(L("查询指针下的词"));Spacer();keycap("⌥ ⇧ P")}}
+                row {HStack {Text(L("查询指针下的词"));Spacer();keycap("⌥ ⇧ P").padding(.leading,12).frame(width:200,alignment:.leading)}}
             }
             if !appState.trusted {
                 HStack {note("需要先修复辅助功能授权，系统查词保持原样。");Spacer();Button(L("开启…"),action:openAccessibility)}
@@ -132,7 +135,7 @@ private struct SidebarMaterial:NSViewRepresentable {
                     note("关闭窗口后，PressTrans 会继续运行。可随时从应用程序中重新打开设置。")
                 }.padding(.top,12)
             }.font(.system(size:12)).foregroundStyle(.secondary)
-            HStack(spacing:18) {Button(L("手动查询…")){state.manual=true};Button(L("预览浮窗"),action:preview)}.buttonStyle(.link).font(.system(size:12))
+            HStack(spacing:18) {Button(L("手势演示")){state.gestureDemo=true};Button(L("手动查询…")){state.manual=true};Button(L("预览浮窗"),action:preview)}.buttonStyle(.link).font(.system(size:12))
         }
     }
     private var translation:some View {
@@ -142,7 +145,7 @@ private struct SidebarMaterial:NSViewRepresentable {
                 rule
                 row {languagePicker("解释语言",selection:$state.explanation,allowTarget:true).onChange(of:state.explanation){_,value in TranslationPreferences.explanation=value}}
                 rule
-                row {HStack {Text(L("同语言内容"));Spacer();Picker(L("同语言内容"),selection:$state.sameLanguage) {Text(L("直接释义")).tag(false);Text(L("翻译为另一种语言")).tag(true)}.labelsHidden().frame(width:200).onChange(of:state.sameLanguage){_,value in TranslationPreferences.sameLanguageTranslate=value}}}
+                row {HStack {Text(L("同语言内容"));Spacer();GlassMenuPicker(title:L("同语言内容"),value:state.sameLanguage ? L("翻译为另一种语言"):L("直接释义"),selection:$state.sameLanguage) {Text(L("直接释义")).tag(false);Text(L("翻译为另一种语言")).tag(true)}.labelsHidden().frame(width:200).onChange(of:state.sameLanguage){_,value in TranslationPreferences.sameLanguageTranslate=value}}}
                 if state.sameLanguage {
                     rule
                     row {languagePicker("另一种语言",selection:$state.alternate).onChange(of:state.alternate){_,value in TranslationPreferences.alternate=value}}
@@ -157,21 +160,38 @@ private struct SidebarMaterial:NSViewRepresentable {
     private var service:some View {
         Group {
             group {
-                row {HStack {Text(L("在线释义"));Spacer();Toggle(L("在线释义"),isOn:$state.online).labelsHidden().toggleStyle(.switch).controlSize(.small).onChange(of:state.online){_,value in TranslationPreferences.onlineEnabled=value}}}
+                row {HStack {
+                    Text(L("在线释义"));Spacer()
+                    HStack {Toggle(L("在线释义"),isOn:$state.online).labelsHidden().toggleStyle(.switch).controlSize(.small).onChange(of:state.online){_,value in TranslationPreferences.onlineEnabled=value;state.demoKind = .online};Spacer();demoButton(.online)}.padding(.leading,12).frame(width:200)
+                }}
                 rule
-                row {HStack {VStack(alignment:.leading,spacing:4) {Text(ServicePreferences.provider.rawValue);Text(ServicePreferences.model).font(.system(size:11)).foregroundStyle(.secondary)};Spacer();Button(L("配置…")){state.prepareService()}}}
+                row {HStack {Text(ServicePreferences.provider.rawValue);Spacer();HStack {Text(ServicePreferences.model).font(.system(size:11)).foregroundStyle(.secondary).lineLimit(1);Spacer();Button(L("配置…")){state.prepareService()}}.padding(.leading,12).frame(width:200)}}
+                rule
+                row {HStack {
+                    Text(L("屏幕识字"));Spacer()
+                    HStack {Toggle(L("屏幕识字"),isOn:$state.ocr).labelsHidden().toggleStyle(.switch).controlSize(.small).onChange(of:state.ocr){_,value in ScreenTextCapture.enabled=value;state.demoKind = .ocr};Spacer();demoButton(.ocr)}.padding(.leading,12).frame(width:200)
+                }}
             }
-            if state.online && !state.configured {note("在线服务尚未配置，离线词典仍可使用。")}
-            DisclosureGroup(L("数据与权限")) {
-                VStack(alignment:.leading,spacing:16) {
-                    note("开启智能释义后，所选文字和附近上下文会发送至你配置的服务。关闭后，离线查询完全在本机完成。")
-                    HStack {Text(L("辅助功能权限"));Spacer();Button(L("系统设置…"),action:openAccessibility)}
-                    Toggle(L("取词失败时使用屏幕识字"),isOn:$state.ocr).toggleStyle(.switch).controlSize(.small).onChange(of:state.ocr){_,value in ScreenTextCapture.enabled=value}
-                    if state.ocr && !CGPreflightScreenCaptureAccess() {Button(L("授权…")){CGRequestScreenCaptureAccess()}}
-                    note("仅识别指针附近的一小块画面。截图不保存、不上传；识别出的目标行可用于在线释义。首次初始化可能较慢，图片和复杂排版仍在适配。需要 macOS 15.2 或更新版本。")
-                }.padding(.top,14)
-            }.font(.system(size:12)).foregroundStyle(.secondary)
+            if state.online && !state.configured {HStack {note("尚未配置在线服务");Spacer();Button(L("配置…")){state.prepareService()}}}
+            if state.ocr && !CGPreflightScreenCaptureAccess() {HStack {note("需要屏幕录制权限");Spacer();Button(L("授权…")){state.permissions=true}}}
+            FeatureDemo(kind:state.demoKind,trigger:state.demoReplay)
+            HStack(alignment:.top) {note("在线查询发送文字与上下文；截图不上传。");Spacer();Button(L("权限与隐私…")){state.permissions=true}.buttonStyle(.link)}
         }
+    }
+    private func demoButton(_ kind:FeatureDemoKind)->some View {
+        Button {state.demoKind=kind;state.demoReplay+=1} label:{Image(systemName:"play.circle").font(.system(size:15)).foregroundStyle(.secondary)}.buttonStyle(.plain).help(L("查看效果")).accessibilityLabel((kind == .online ? L("在线释义"):L("屏幕识字"))+" · "+L("查看效果"))
+    }
+    private var permissions:some View {
+        VStack(alignment:.leading,spacing:20) {
+            Text(L("数据与权限")).font(.system(size:20,weight:.semibold))
+            HStack {Text(L("辅助功能权限"));Spacer();Button(L("系统设置…"),action:openAccessibility)}
+            HStack {Text(L("屏幕识字"));Spacer();Button(L("授权…")){CGRequestScreenCaptureAccess()}}
+            note("在线查询发送文字与上下文；截图不上传。")
+            DisclosureGroup(L("详细说明")) {
+                VStack(alignment:.leading,spacing:12){note("开启智能释义后，所选文字和附近上下文会发送至你配置的服务。关闭后，离线查询完全在本机完成。");note("仅识别指针附近的一小块画面。截图不保存、不上传；识别出的目标行可用于在线释义。首次初始化可能较慢，图片和复杂排版仍在适配。需要 macOS 15.2 或更新版本。")}.padding(.top,12)
+            }.font(.system(size:12))
+            HStack {Spacer();Button(L("完成")){state.permissions=false}.keyboardShortcut(.cancelAction)}
+        }.padding(28).frame(width:470)
     }
     private var serviceEditor:some View {
         VStack(alignment:.leading,spacing:20) {
@@ -206,7 +226,7 @@ private struct SidebarMaterial:NSViewRepresentable {
         VStack(alignment:.leading,spacing:8) {
             HStack {
                 Text(L(title));Spacer(minLength:16)
-                Picker(L(title),selection:Binding(get:{LanguageOptions.values.contains(selection.wrappedValue) || ["system","target"].contains(selection.wrappedValue) ? selection.wrappedValue:"custom"},set:{selection.wrappedValue = $0 == "custom" ? "":$0})) {
+                GlassMenuPicker(title:L(title),value:selection.wrappedValue == "system" ? L("跟随系统"):selection.wrappedValue == "target" ? L("与译文相同"):selection.wrappedValue.isEmpty ? L("其他语言…"):LanguageOptions.title(selection.wrappedValue),selection:Binding(get:{LanguageOptions.values.contains(selection.wrappedValue) || ["system","target"].contains(selection.wrappedValue) ? selection.wrappedValue:"custom"},set:{selection.wrappedValue = $0 == "custom" ? "":$0})) {
                 if allowSystem {Text(L("跟随系统")).tag("system")}
                 if allowTarget {Text(L("与译文相同")).tag("target")}
                 ForEach(LanguageOptions.values,id:\.self){Text(LanguageOptions.title($0)).tag($0)}

@@ -24,7 +24,7 @@ bash scripts/build-native.sh
 - `took off` → `take off`；`turned it down` → `turn down`；`looked after` → `look after`；`recieve` 显示 `receive` 拼写建议。实际匹配词条可见。
 - 最多分析前 24 个词、展示 5 个条目；单条释义展示上限 1800 字符。复杂句回退到部分词组/单词释义，明确标注不是整句翻译。
 - 离线词典不承诺语境消歧，不能可靠理解讽刺、梗或未收录习语。模板仅排版已有释义，不生成新的翻译结论。
-- 可选在线增强需主动开启；个人 DeepSeek 配置位于“隐私与服务”。官方地址固定，不要求填写 Base URL。离线结果先显示，在线成功后替换；认证失败、限流、断流或超时恢复完整离线结果。
+- 可选在线增强需主动开启；配置位于“服务 → 配置…”。默认 DeepSeek，支持编辑兼容服务的 Base URL 和模型。离线结果先显示，在线成功后替换；认证失败、限流、断流或超时恢复完整离线结果。
 - 个人 API 配置只是开发/高级入口。面向普通用户的免配置云服务尚未建设，未来需要自有后端、账户/额度与成本控制；不得将任何测试密钥写入客户端分发。
 
 ## 隐私与资源管理
@@ -62,7 +62,7 @@ PRESSTRANS_DICTIONARY="$PWD/native/Resources/dictionary.sqlite" native/.build/re
 
 ## 实验重按与可逆切换
 
-设置提供“系统查词 / PressTrans”分段按钮。启用顺序：权限有效 → 压力监听启动成功 → 持久保存原始系统查词偏好 → 关闭系统查词，任一步失败都不进入开启状态。关闭和正常退出会停止监听并恢复原始值（包括原先不存在的键）；中途崩溃时，恢复记录留存，下次启动恢复。若用户随后手动修改了系统设置，避免覆盖其新选择。强制结束进程后系统偏好不能立即恢复，可重新打开应用或在触控板设置中手动恢复。
+“通用 → 触控板重按”提供“系统查词 / PressTrans”菜单。启用顺序：权限有效 → 压力监听启动成功 → 持久保存原始系统查词偏好 → 关闭系统查词，任一步失败都不进入开启状态。关闭和正常退出会停止监听并恢复原始值（包括原先不存在的键）；中途崩溃时，恢复记录留存，下次启动恢复。若用户随后手动修改了系统设置，避免覆盖其新选择。强制结束进程后系统偏好不能立即恢复，可重新打开应用或在触控板设置中手动恢复。
 
 只触及三项已观察到的查词偏好：全局 `com.apple.trackpad.forceClick`、内置及蓝牙触控板的 `TrackpadThreeFingerTapGesture`，不修改 `ForceSuppressed` 等触感开关。不保证未来系统沿用这些未公开配置；需核对系统设置与真实行为。
 
@@ -70,11 +70,11 @@ PRESSTRANS_DICTIONARY="$PWD/native/Resources/dictionary.sqlite" native/.build/re
 
 ## 全局取词、OCR 与界面更新
 
-设置改为原生侧栏与分组表单：通用、翻译、重按与快捷键、隐私与服务、手动查询。窗口可调整大小，支持 Command-W；只在设置窗口可见时显示 Dock。浮窗采用 AppKit popover 材质、指向目标的箭头与黄色点击穿透高亮，支持减少动态效果。
+设置分为通用、翻译、服务、界面四栏；手动查询从通用页或菜单打开。窗口可调整大小，支持 Command-W；只在设置窗口可见时显示 Dock。浮窗采用 AppKit popover 材质、指向目标的箭头与黄色点击穿透高亮，支持减少动态效果。
 
 直接取词按能力路由，不按应用包名限制：首先尝试 WebKit/Chromium 常见的 AX 文本标记接口，再尝试字符范围接口；从命中或焦点节点沿父链有限查找，绝不遍历整个文档。标记范围先读取长度，目标最多 2000 UTF-16 单元，上下文最多 3000，再经公共预算限制；指针查询必须命中真实字词边界，空白不能吸附到附近单词。最终选区仍限制为 1000 Unicode 码点。浏览器标记接口并非所有应用都支持，需保留回退。
 
-Option-Shift-P 查询指针下的词，与重按共用路径；Option-Shift-T 处理已有选区。“重按与快捷键 → 兼容性说明”提供一次性的 5 秒延时取词检测，并在内存中显示最近一次结果摘要，退出即清除。这不是物理压力测试。
+Option-Shift-P 查询指针下的词，与重按共用路径；Option-Shift-T 处理已有选区。“通用 → 高级与诊断”提供一次性的 5 秒延时取词检测，并在内存中显示最近一次结果摘要，退出即清除。这不是物理压力测试。
 
 可选“取词失败时使用屏幕识字”默认关闭。仅主动指针查询且 AX 读取失败时，ScreenCaptureKit 截取指针附近至多 640×260 点的可见区域；Vision 在本机识别，选择包围指针的字词，附近上下文只使用同一识别行。图片不落盘、不上传，不创建持续录制流。拒绝安全输入框，不使用 OCR 绕过权限拒绝。开启在线释义时，识别出的目标和目标行仍会按在线设置发送给 DeepSeek。OCR 不能保证所有语言、低清文字、竖排或复杂排版正确。
 
@@ -86,9 +86,13 @@ App UI: English, Simplified Chinese, Traditional Chinese, or system default. Tra
 
 Online service defaults to DeepSeek and accepts editable OpenAI Chat Completions compatible Base URLs and model IDs. See [API setup guide](../docs/API-setup.md) for provider presets, language settings, data handling and troubleshooting. Keys are bound to the saved endpoint; redirects are rejected. Presets are not a claim of live paid-account validation.
 
-## Settings styles and compact lookup
+## Appearance and local demonstrations (0.4)
 
-The A/B switch in the top-right corner changes Settings immediately and persists the choice. A uses a native sidebar and grouped controls; B uses a paper surface and top tabs. Both share preferences. Neither is designated the final product default yet; a new installation starts with A for comparison.
+**A is the default.** Appearance contains visual cards for A (native sidebar) and B (paper surface with top tabs); the prominent header switch has been removed. Both share preferences and preserve an explicitly selected style.
+
+The same page offers three lookup surfaces (Glass, Paper, Graphite), system/serif/rounded fonts, 16–24 pt meaning text, four readable ink palettes, and a live preset preview. Glass opacity ranges from 80% to 100% to preserve readability. Reduce Transparency or Increase Contrast uses an opaque reading surface. Controls use regular Liquid Glass on macOS 26+, with a conventional background on earlier systems and when accessibility requires it. Font and color changes apply to the actual lookup panel; larger text is included in its height calculation.
+
+Services shows a compact local demonstration of contextual translation or screen text recognition. General includes a Force Click illustration. All use fixed sample text and results: no provider request, token usage, screen capture or permission request occurs. Animations play once, can be replayed, and are cancelled when leaving; Reduce Motion shows the final state. The Play buttons demonstrate the enabled effect without changing the actual feature switch. Full privacy details remain available in Services → Permissions & Privacy.
 
 Lookups always start compact: original, first meaning and copy. Explain expands the already-received answer without another request. Context has its own disclosure. The expanded More menu retains copying the original/full answer/context and requesting further online explanation or retrying. Error text remains visible when no answer is available. Streaming text does not animate a window resize on every chunk; manual expansion respects Reduce Motion.
 

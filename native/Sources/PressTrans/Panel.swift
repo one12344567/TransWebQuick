@@ -33,10 +33,10 @@ final class LookupPanel:NSPanel {
         // Header, padding and toolbar stay fixed; only visible content contributes to height.
         var result:CGFloat=92 + min(height(model.selection,.systemFont(ofSize:12)),model.expanded ? 45:30)
         if model.loading && model.answer.isEmpty {result+=28}
-        result+=height(parts.meaning,.systemFont(ofSize:20,weight:.medium),spacing:3)
+        result+=height(parts.meaning,PopupAppearance.nsFont(size:PopupAppearance.size,weight:.medium),spacing:3)
         if model.expanded {
             result+=20
-            if !parts.explanation.isEmpty {result+=14+height(parts.explanation,.systemFont(ofSize:14),spacing:4)}
+            if !parts.explanation.isEmpty {result+=14+height(parts.explanation,PopupAppearance.nsFont(size:max(12,PopupAppearance.size*0.7)),spacing:4)}
             if !model.matchNote.isEmpty {result+=14+height(model.matchNote,.systemFont(ofSize:11))}
             if model.contextExpanded && !model.source.isEmpty && !model.preview {result+=28}
             if !model.context.isEmpty {result+=28}
@@ -90,6 +90,10 @@ final class LookupPanel:NSPanel {
             if event.type == .leftMouseDown && event.window !== self.panel { self.hide() }
             return event
         }
+        observers.append(NotificationCenter.default.addObserver(forName:UserDefaults.didChangeNotification,object:nil,queue:.main){[weak self] _ in
+            Task { @MainActor in self?.surface.needsLayout=true;self?.resize() }
+        })
+        observers.append(NSWorkspace.shared.notificationCenter.addObserver(forName:NSWorkspace.accessibilityDisplayOptionsDidChangeNotification,object:nil,queue:.main){[weak self] _ in Task { @MainActor in self?.surface.needsLayout=true }})
         observers.append(NotificationCenter.default.addObserver(forName:NSMenu.didBeginTrackingNotification,object:nil,queue:.main){[weak self] _ in MainActor.assumeIsolated {self?.menuTracking=true}})
         observers.append(NotificationCenter.default.addObserver(forName:NSMenu.didEndTrackingNotification,object:nil,queue:.main){[weak self] _ in MainActor.assumeIsolated {self?.menuTracking=false}})
         observers.append(NSWorkspace.shared.notificationCenter.addObserver(forName:NSWorkspace.didActivateApplicationNotification,object:nil,queue:.main){[weak self] note in

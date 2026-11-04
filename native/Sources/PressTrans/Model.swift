@@ -61,6 +61,11 @@ import PressTransCore
 }
 struct LookupView: View {
     @AppStorage("interfaceLanguage") private var interfaceLanguage="system"
+    @AppStorage("popupFont") private var popupFont="system"
+    @AppStorage("popupFontSize") private var popupFontSize=20.0
+    @AppStorage("popupInk") private var popupInk="automatic"
+    @AppStorage("popupStyle") private var popupStyle="glass"
+    @Environment(\.colorScheme) private var colorScheme
     @ObservedObject var model:LookupModel
     var close:()->Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -81,10 +86,10 @@ struct LookupView: View {
                         HStack(spacing:9){ProgressView().controlSize(.small);Text(L("正在查询…")).font(.system(size:13)).foregroundStyle(.secondary)}.padding(.vertical,4)
                     }
                     if !parts.meaning.isEmpty {
-                        Text(parts.meaning).font(.system(size:20,weight:.medium)).lineSpacing(3).textSelection(.enabled).frame(maxWidth:.infinity,alignment:.leading)
+                        Text(parts.meaning).font(.system(size:PopupAppearance.size,weight:.medium,design:PopupAppearance.design)).foregroundStyle(PopupAppearance.ink(dark:popupStyle == "graphite" || colorScheme == .dark)).lineSpacing(3).textSelection(.enabled).frame(maxWidth:.infinity,alignment:.leading)
                     }
                     if model.expanded {
-                        if !parts.explanation.isEmpty {Text(parts.explanation).font(.system(size:14)).foregroundStyle(.secondary).lineSpacing(4).textSelection(.enabled).frame(maxWidth:.infinity,alignment:.leading)}
+                        if !parts.explanation.isEmpty {Text(parts.explanation).font(.system(size:max(12,PopupAppearance.size*0.7),design:PopupAppearance.design)).foregroundStyle(.secondary).lineSpacing(4).textSelection(.enabled).frame(maxWidth:.infinity,alignment:.leading)}
                         if !model.matchNote.isEmpty {Text(model.matchNote).font(.system(size:11)).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)}
                         if !model.context.isEmpty {
                             Button {withAnimation(reduceMotion ? nil:.easeInOut(duration:0.18)){model.contextExpanded.toggle()}} label:{
