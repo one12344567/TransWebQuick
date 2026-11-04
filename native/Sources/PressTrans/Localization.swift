@@ -7,7 +7,31 @@ enum LanguageOptions {
         if code.hasPrefix("zh") {return code.contains("Hant") || code.contains("TW") || code.contains("HK") ? "Chinese (Traditional)":"Chinese (Simplified)"}
         return Locale(identifier:"en").localizedString(forLanguageCode:Locale(identifier:code).language.languageCode?.identifier ?? "en")?.capitalized ?? "English"
     }
-    static func title(_ language:String)->String {language}
+    // Keep stored values stable; language choices always display their own names.
+    private static let nativeNames:[String:String]=[
+        "English":"English",
+        "Chinese (Simplified)":"简体中文",
+        "Chinese (Traditional)":"繁體中文",
+        "Japanese":"日本語",
+        "Korean":"한국어",
+        "French":"Français",
+        "German":"Deutsch",
+        "Spanish":"Español",
+        "Portuguese":"Português",
+        "Italian":"Italiano",
+        "Russian":"Русский",
+        "Arabic":"العربية",
+        "Hindi":"हिन्दी",
+        "Bengali":"বাংলা",
+        "Turkish":"Türkçe",
+        "Vietnamese":"Tiếng Việt",
+        "Thai":"ไทย",
+        "Indonesian":"Bahasa Indonesia",
+        "Dutch":"Nederlands",
+        "Polish":"Polski",
+        "Ukrainian":"Українська"
+    ]
+    static func title(_ language:String)->String {nativeNames[language] ?? language}
 }
 enum AppLanguage {
     static var current:String {

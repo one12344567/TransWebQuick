@@ -120,3 +120,8 @@ M0 无跨文本节点自动扩词（手动跨标签选区可读取），无完�
 - Services replaces long inline descriptions with one local feature illustration. Privacy details remain in a separate sheet. Online, OCR and Force Click illustrations were each observed at their initial and final states; none changed the real feature toggles. Their code contains only fixed samples and finite, cancellable animation tasks, with no translator, provider, screen capture or credential dependency. These illustrations do not establish new real-hardware gesture or OCR compatibility.
 - Accessibility paths use opaque surfaces for Reduce Transparency / Increase Contrast and the completed illustration for Reduce Motion. Those system modes, older macOS fallback and an English layout of the new Appearance page have not been visually retested in this pass.
 - Release build and installed signature passed. The existing core checks passed in the normal host environment, including the local OCR raster fixture, Unicode/context, provider policy, pressure detector, dictionary and stream fallback/cancellation. The restricted execution attempt could not create a Vision pixel buffer; rerunning outside that restriction passed. No paid API call was used.
+
+### 2026-11-04 · Native language names (0.4.1)
+
+- Translation, explanation and alternate-language pickers share native language labels for all 21 presets (简体中文, 日本語, 한국어, Français, العربية, etc.). Stored values and translation policy remain unchanged; custom language names pass through as entered.
+- Release build and installed signature passed. The installed translation menu and its selected 简体中文 label were visually checked; the existing language choice was preserved. No API request was needed.
