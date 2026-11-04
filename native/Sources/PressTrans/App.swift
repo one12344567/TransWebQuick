@@ -110,11 +110,11 @@ import PressTransCore
     @objc func manual() { showWindow(manual:true) }
     func showWindow(manual:Bool) {
         if window == nil {
-            window=NSWindow(contentRect:NSRect(x:0,y:0,width:820,height:590),styleMask:[.titled,.closable,.miniaturizable,.resizable],backing:.buffered,defer:false)
-            window?.minSize=NSSize(width:760,height:560)
+            window=NSWindow(contentRect:NSRect(x:0,y:0,width:700,height:480),styleMask:[.titled,.closable,.miniaturizable,.resizable],backing:.buffered,defer:false)
+            window?.minSize=NSSize(width:660,height:450)
             window?.title="PressTrans";window?.isReleasedWhenClosed=false;window?.delegate=self;window?.center()
         }
-        window?.contentView=NSHostingView(rootView:SettingsView(appState:state,menuVisibility:{[weak self] visible in self?.setMenuVisible(visible)},manualMode:manual,changeMode:{[weak self] in self?.showWindow(manual:!manual)},preview:{[weak self] in self?.hideSettings();self?.preview()},translate:{[weak self] text in
+        window?.contentView=NSHostingView(rootView:SettingsView(appState:state,menuVisibility:{[weak self] visible in self?.setMenuVisible(visible)},manualMode:manual,changeMode:{[weak self] in self?.showWindow(manual:!manual)},preview:{[weak self] in self?.preview()},translate:{[weak self] text in
             guard let self,let context=ContextBuilder.make(selection:text,surrounding:nil,sourceApp:L("手动输入")) else{return}
             self.hideSettings();self.panel.model.show(context);self.panel.show()
         }))

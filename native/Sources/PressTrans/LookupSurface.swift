@@ -28,7 +28,7 @@ import SwiftUI
         effect.frame=bounds
         host.frame=NSRect(x:0,y:pointsUp ? 0:inset,width:bounds.width,height:bounds.height-inset)
         let body=NSRect(x:0.5,y:pointsUp ? 0.5:inset+0.5,width:bounds.width-1,height:bounds.height-inset-1)
-        let shape=NSBezierPath(roundedRect:body,xRadius:21,yRadius:21)
+        let shape=NSBezierPath(roundedRect:body,xRadius:14,yRadius:14)
         if let pointerX {
             let x=min(max(pointerX,32),bounds.width-32)
             let base=pointsUp ? body.maxY-1:body.minY+1
@@ -43,9 +43,9 @@ import SwiftUI
         effect.maskImage=mask
         // The OS supplies the material and window shadow. The subtle rim adds definition on white pages.
         let dark=effectiveAppearance.bestMatch(from:[.darkAqua,.aqua]) == .darkAqua
-        outline.path=CGPath(roundedRect:body,cornerWidth:21,cornerHeight:21,transform:nil)
+        outline.path=CGPath(roundedRect:body,cornerWidth:14,cornerHeight:14,transform:nil)
         outline.strokeColor=NSColor.black.withAlphaComponent(dark ? 0.3:0.13).cgColor
-        innerRim.path=CGPath(roundedRect:body.insetBy(dx:0.8,dy:0.8),cornerWidth:20,cornerHeight:20,transform:nil)
+        innerRim.path=CGPath(roundedRect:body.insetBy(dx:0.8,dy:0.8),cornerWidth:13,cornerHeight:13,transform:nil)
         innerRim.strokeColor=NSColor.white.withAlphaComponent(dark ? 0.14:0.62).cgColor
         window?.invalidateShadow()
     }

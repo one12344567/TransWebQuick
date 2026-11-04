@@ -13,9 +13,9 @@
 ## 配置流程
 
 1. 在服务商的官方网站注册 API 账户、创建 API Key，并确认账户可用额度与模型权限。聊天应用的会员不一定包含 API 额度。
-2. 打开「隐私与服务」，选择服务商。PressTrans 会填入地址和模型示例。
-3. 检查 Base URL、模型名称，输入该服务商的 API Key，点击「保存到本机」。只有保存成功才会生效。
-4. 在「翻译」开启「智能语境释义」。在「手动查询」输入 `Hello`，点击查询，检查返回语言与设置一致。
+2. 打开「服务 → 配置…」，选择服务商。PressTrans 会填入地址和模型示例。
+3. 检查 Base URL、模型名称，输入该服务商的 API Key，点击「保存」。只有保存成功才会生效。
+4. 在「服务」开启「在线释义」。在「手动查询」输入 `Hello`，点击查询，检查返回语言与设置一致。
 
 默认服务为 DeepSeek，不需要自建或租用中转服务器。自定义服务必须兼容 **OpenAI Chat Completions + SSE 流式输出**；不直接支持只提供 Anthropic Messages 或 OpenAI Responses 的地址。
 
@@ -45,7 +45,7 @@
 ## 排查
 
 - 保存失败：检查 HTTPS 地址、模型名和非空 Key，地址中不要带 `?` 参数。
-- 无在线结果：确认「智能语境释义」已开启，密钥已经保存，账户有额度且模型 ID 可用。
+- 无在线结果：确认「在线释义」已开启，密钥已经保存，账户有额度且模型 ID 可用。
 - 401 / 403：核对 Key、所属服务与模型权限；429：检查额度或稍后重试。
 - 404：核对 Base URL 路径及模型名称，不能填服务商的网页聊天地址。
 - 回答被截断或一直等待：尝试更快的非推理模型。当前短释义最多 600、详细释义最多 900 个输出 token，部分推理模型可能因此无法返回完整答案。
@@ -55,7 +55,7 @@
 
 Choose the app language in **General → App language**. English, Simplified Chinese and Traditional Chinese are available, with a system-language default (English fallback). Choose translation and explanation languages independently in **Translation**. Source detection is automatic. “Other language” accepts a language name beyond the presets.
 
-In **Privacy & Services**, select a provider, verify its Base URL and model ID, enter that provider's API key and choose **Save on This Mac**. Enable contextual translation in **Translation** and try `Hello` in **Manual Lookup**. The table above links to each provider's official documentation. DeepSeek is the default; no relay server is required.
+In **Services → Configure…**, select a provider, verify its Base URL and model ID, enter that provider's API key and choose **Save**. Enable online translation in **Services** and try `Hello` in **Manual Lookup**. The table above links to each provider's official documentation. DeepSeek is the default; no relay server is required.
 
 Custom services must support OpenAI-compatible Chat Completions with streaming SSE. The app appends `/chat/completions` once. Remote URLs require HTTPS; loopback HTTP is supported for local services. Provider regions, model access and API billing must match your account. Chat subscriptions do not necessarily include API credit.
 

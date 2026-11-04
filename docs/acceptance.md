@@ -102,3 +102,12 @@ M0 无跨文本节点自动扩词（手动跨标签选区可读取），无完�
 本地 Vision 图片检查通过：精确识别 limits、同一行上下文、Retina 2x / 负屏幕原点坐标映射、空白拒绝。首次进程观察到 28.4 秒初始化；再次启动同样检查为 82 ms，不能视为所有设备冷启动指标。真实 Chrome 窗口截图 OCR 集成尚未通过，正在核查截图裁剪与定位；正式 UI 标为实验功能，不能宣称图片/画布已普遍稳定。截图不落盘、不上传，纯本地识别。用户已选择开启 OCR 回退。
 
 多语言提示策略、Unicode 取词、压力状态机、上下文预算、SSE、真实词典和在线失败回退/取消检查通过。之前的三次真实模型样本分别验证日语→中文、中文→英语+中文解释、中文仅释义。8 GB Intel、长时间运行、PDF/Canvas 和真实触控板全流程兼容矩阵仍未完成。
+
+### 2026-11-04 · Two settings styles and compact lookup
+
+- Native installed app: A/B style switching verified; B persists across application replacement/relaunch. Both use the same settings.
+- Native lookup panel: default collapsed, expand explanation, expand source context, open copy menu, dismiss menu without losing panel, and collapse again verified through accessibility and screenshots. Expansion does not invoke the translator.
+- Service configuration: fields appear only in a sheet; an edited model draft was cancelled and the saved model remained deepseek-flash. No provider request or secret change was needed.
+- Layout follow-ups: fixed picker widths; moved source attribution into expanded context; removed the intrusive scroll indicator and added expanded text space.
+- Found and fixed delayed interface language refresh by binding the picker directly to AppStorage. Final screenshot recheck of that fix was blocked by the Mac lock screen; do not claim final English visual acceptance yet.
+- Release build and installed signature verified. Core checks passed: Unicode/context, provider endpoints, pressure detector, OCR fixture, dictionary, streaming failure fallback and cancellation. This does not establish new real-hardware Force Click compatibility.

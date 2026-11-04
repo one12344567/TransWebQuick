@@ -18,26 +18,33 @@ final class LookupPanel:NSPanel {
     private var changes:AnyCancellable?
     private var anchor:CGRect?
     private var lastExpanded=false
+    private var menuTracking=false
     private var surface:LookupSurface!
     private let highlight=WordHighlight()
     private var placedBelow=true
     private var showTask:Task<Void,Never>?
     private func desiredHeight() -> CGFloat {
-        func height(_ text:String,_ font:NSFont)->CGFloat {
+        func height(_ text:String,_ font:NSFont,spacing:CGFloat=0)->CGFloat {
             guard !text.isEmpty else{return 0}
-            return ceil((text as NSString).boundingRect(with:NSSize(width:368,height:2000),options:[.usesLineFragmentOrigin,.usesFontLeading],attributes:[.font:font]).height)
+            let paragraph=NSMutableParagraphStyle();paragraph.lineSpacing=spacing
+            return ceil((text as NSString).boundingRect(with:NSSize(width:330,height:4000),options:[.usesLineFragmentOrigin,.usesFontLeading],attributes:[.font:font,.paragraphStyle:paragraph]).height)
         }
         let parts=AnswerParts.split(model.answer)
-        var result:CGFloat=132 + height(model.selection.isEmpty ? L("选中，就读懂。"):model.selection,.systemFont(ofSize:20,weight:.semibold))
-        if !model.source.isEmpty {result+=30}
-        if model.loading && model.answer.isEmpty {result+=58}
-        result+=height(parts.meaning,.systemFont(ofSize:20,weight:.medium))*1.15
-        if !parts.explanation.isEmpty {result+=16+height(parts.explanation,.systemFont(ofSize:14))*1.3}
-        if !model.matchNote.isEmpty {result+=height(model.matchNote,.systemFont(ofSize:11))+16}
-        if !model.message.isEmpty && !model.loading {result+=height(model.message,.systemFont(ofSize:12))+16}
-        if !model.context.isEmpty {result+=34}
-        if model.expanded {result+=height(model.context,.systemFont(ofSize:12))*1.3+30}
-        return min(max(result,240),min(580,(NSScreen.main?.visibleFrame.height ?? 800)-24))
+        // Header, padding and toolbar stay fixed; only visible content contributes to height.
+        var result:CGFloat=92 + min(height(model.selection,.systemFont(ofSize:12)),model.expanded ? 45:30)
+        if model.loading && model.answer.isEmpty {result+=28}
+        result+=height(parts.meaning,.systemFont(ofSize:20,weight:.medium),spacing:3)
+        if model.expanded {
+            result+=20
+            if !parts.explanation.isEmpty {result+=14+height(parts.explanation,.systemFont(ofSize:14),spacing:4)}
+            if !model.matchNote.isEmpty {result+=14+height(model.matchNote,.systemFont(ofSize:11))}
+            if model.contextExpanded && !model.source.isEmpty && !model.preview {result+=28}
+            if !model.context.isEmpty {result+=28}
+            if model.contextExpanded {result+=14+height(model.context,.systemFont(ofSize:12),spacing:4)}
+        }
+        if !model.message.isEmpty && !model.loading && (model.expanded || model.answer.isEmpty) {result+=14+height(model.message,.systemFont(ofSize:12))}
+        let screen=screenAnchor().flatMap{area in NSScreen.screens.first(where:{$0.frame.intersects(area)})} ?? NSScreen.main
+        return min(max(result,142),min(model.expanded ? 560:320,(screen?.visibleFrame.height ?? 800)-40))
     }
     private func screenAnchor()->CGRect? {
         guard let anchor,let primary=NSScreen.screens.first else{return nil}
@@ -48,37 +55,43 @@ final class LookupPanel:NSPanel {
         let screen=NSScreen.screens.first(where:{$0.frame.intersects(area) || $0.frame.contains(area.origin)}) ?? NSScreen.main!
         let bounds=screen.visibleFrame, height=model.panelHeight+(anchor == nil ? 0:LookupSurface.tip)
         let y=placedBelow ? area.minY-height-6:area.maxY+6
-        let frame=NSRect(x:min(max(area.midX-204,bounds.minX+12),bounds.maxX-420),y:min(max(y,bounds.minY+12),bounds.maxY-height-12),width:408,height:height)
+        let frame=NSRect(x:min(max(area.midX-190,bounds.minX+12),bounds.maxX-392),y:min(max(y,bounds.minY+12),bounds.maxY-height-12),width:380,height:height)
         surface.pointsUp=placedBelow;surface.pointerX=anchor == nil ? nil:area.midX-frame.minX
         return frame
     }
     private func resize() {
         guard panel.isVisible else{return}
         var height=desiredHeight()
-        if model.loading {height=max(model.panelHeight,ceil(height/24)*24)}
+        if model.loading && lastExpanded == model.expanded {height=max(model.panelHeight,ceil(height/16)*16)}
         guard abs(height-model.panelHeight)>1 else{return}
-        let animate=true;lastExpanded=model.expanded
+        let animate = lastExpanded != model.expanded || !model.loading;lastExpanded=model.expanded
         model.panelHeight=height
         if animate && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
             NSAnimationContext.runAnimationGroup { ctx in ctx.duration=0.18;panel.animator().setFrame(targetFrame(),display:true) }
         } else {panel.setFrame(targetFrame(),display:true)}
     }
     init() {
-        panel=LookupPanel(contentRect:NSRect(x:0,y:0,width:408,height:440),styleMask:[.borderless,.nonactivatingPanel],backing:.buffered,defer:false)
+        panel=LookupPanel(contentRect:NSRect(x:0,y:0,width:380,height:440),styleMask:[.borderless,.nonactivatingPanel],backing:.buffered,defer:false)
+        panel.title="PressTrans";panel.setAccessibilityRole(.window);panel.setAccessibilitySubrole(.floatingWindow)
         panel.level = .floating; panel.isOpaque=false; panel.backgroundColor = .clear; panel.hasShadow=true
         panel.isReleasedWhenClosed=false; panel.hidesOnDeactivate=false; panel.collectionBehavior=[.canJoinAllSpaces,.fullScreenAuxiliary]
         surface=LookupSurface(model:model,close:{[weak self] in self?.hide()});panel.contentView=surface
         panel.dismiss={ [weak self] in self?.hide() }
-        changes=model.objectWillChange.throttle(for:.milliseconds(100),scheduler:RunLoop.main,latest:true).sink { [weak self] _ in self?.resize() }
+        changes=model.objectWillChange.throttle(for:.milliseconds(100),scheduler:RunLoop.main,latest:true).sink { [weak self] _ in
+            // Published notifications precede assignment. Resize on the next run-loop turn.
+            DispatchQueue.main.async {self?.resize()}
+        }
         globalMonitor=NSEvent.addGlobalMonitorForEvents(matching:[.leftMouseDown,.rightMouseDown,.scrollWheel,.keyDown]) { [weak self] event in
-            Task { @MainActor in if event.type != .keyDown || event.keyCode==53 { self?.hide() } }
+            Task { @MainActor in if self?.menuTracking != true && (event.type != .keyDown || event.keyCode==53) { self?.hide() } }
         }
         localMonitor=NSEvent.addLocalMonitorForEvents(matching:[.keyDown,.leftMouseDown]) { [weak self] event in
-            guard let self, self.panel.isVisible else { return event }
+            guard let self, self.panel.isVisible, !self.menuTracking else { return event }
             if event.type == .keyDown && event.keyCode==53 { self.hide(); return nil }
             if event.type == .leftMouseDown && event.window !== self.panel { self.hide() }
             return event
         }
+        observers.append(NotificationCenter.default.addObserver(forName:NSMenu.didBeginTrackingNotification,object:nil,queue:.main){[weak self] _ in MainActor.assumeIsolated {self?.menuTracking=true}})
+        observers.append(NotificationCenter.default.addObserver(forName:NSMenu.didEndTrackingNotification,object:nil,queue:.main){[weak self] _ in MainActor.assumeIsolated {self?.menuTracking=false}})
         observers.append(NSWorkspace.shared.notificationCenter.addObserver(forName:NSWorkspace.didActivateApplicationNotification,object:nil,queue:.main){[weak self] note in
             if let app=note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication, app.bundleIdentifier != Bundle.main.bundleIdentifier { Task { @MainActor in self?.hide() } }
         })
@@ -100,7 +113,7 @@ final class LookupPanel:NSPanel {
         showTask=Task { [weak self] in
             if !reduce && anchor != nil {try? await Task.sleep(nanoseconds:55_000_000)}
             guard let self,!Task.isCancelled,self.visibility==current else{return}
-            self.panel.orderFrontRegardless()
+            if self.model.preview {self.panel.makeKeyAndOrderFront(nil)} else {self.panel.orderFrontRegardless()}
             NSAnimationContext.runAnimationGroup({ctx in
                 ctx.duration=reduce ? 0:0.21;ctx.timingFunction=CAMediaTimingFunction(controlPoints:0.16,1,0.3,1)
                 self.panel.animator().setFrame(target,display:true);self.panel.animator().alphaValue=1

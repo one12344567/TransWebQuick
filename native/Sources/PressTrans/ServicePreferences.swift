@@ -24,7 +24,9 @@ enum ServicePreferences {
     static var model:String {UserDefaults.standard.string(forKey:"serviceModel") ?? ServiceProvider.deepseek.model}
     static func save(provider:ServiceProvider,baseURL:String,model:String,key:String)->Bool {
         guard let endpoint=ServiceEndpoint.completionURL(baseURL),!model.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty else{return false}
-        guard Credentials.save(key,endpoint:endpoint.absoluteString) else{return false}
+        let cleaned=key.trimmingCharacters(in:.whitespacesAndNewlines)
+        let savedKey=cleaned.isEmpty && endpoint == ServiceEndpoint.completionURL(Self.baseURL) ? Credentials.load():cleaned
+        guard let savedKey,!savedKey.isEmpty,Credentials.save(savedKey,endpoint:endpoint.absoluteString) else{return false}
         UserDefaults.standard.set(provider.rawValue,forKey:"serviceProvider")
         UserDefaults.standard.set(baseURL.trimmingCharacters(in:.whitespacesAndNewlines),forKey:"serviceBaseURL")
         UserDefaults.standard.set(model.trimmingCharacters(in:.whitespacesAndNewlines),forKey:"serviceModel")

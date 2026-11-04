@@ -85,3 +85,11 @@ Option-Shift-P 查询指针下的词，与重按共用路径；Option-Shift-T �
 App UI: English, Simplified Chinese, Traditional Chinese, or system default. Translation and explanation languages are independent, with automatic source detection and custom language names. The bundled offline dictionary remains English → Simplified Chinese only.
 
 Online service defaults to DeepSeek and accepts editable OpenAI Chat Completions compatible Base URLs and model IDs. See [API setup guide](../docs/API-setup.md) for provider presets, language settings, data handling and troubleshooting. Keys are bound to the saved endpoint; redirects are rejected. Presets are not a claim of live paid-account validation.
+
+## Settings styles and compact lookup
+
+The A/B switch in the top-right corner changes Settings immediately and persists the choice. A uses a native sidebar and grouped controls; B uses a paper surface and top tabs. Both share preferences. Neither is designated the final product default yet; a new installation starts with A for comparison.
+
+Lookups always start compact: original, first meaning and copy. Explain expands the already-received answer without another request. Context has its own disclosure. The expanded More menu retains copying the original/full answer/context and requesting further online explanation or retrying. Error text remains visible when no answer is available. Streaming text does not animate a window resize on every chunk; manual expansion respects Reduce Motion.
+
+Service fields are in a Configure sheet; cancelling discards the draft. A blank key preserves the existing key only when the endpoint matches exactly. Changing endpoints still requires a new key.
