@@ -4,6 +4,7 @@ import PressTransCore
 @main enum CoreChecks {
     static func main() async throws {
         try await checkUsage()
+        try await checkGlyphHighlight()
         let converted=HighlightGeometry.appKitRect(CGRect(x:-300,y:200,width:35,height:18),primaryTop:900)
         precondition(converted==CGRect(x:-300,y:682,width:35,height:18))
         let aligned=HighlightGeometry.aligned(CGRect(x:12.2,y:30.3,width:18.1,height:15.2),scale:2)!

@@ -187,6 +187,7 @@ private struct SidebarMaterial:NSViewRepresentable {
             HStack {Text(L("辅助功能权限"));Spacer();Button(L("系统设置…"),action:openAccessibility)}
             HStack {Text(L("屏幕识字"));Spacer();Button(L("授权…")){CGRequestScreenCaptureAccess()}}
             note("在线查询发送文字与上下文；截图不上传。")
+            note("清晰高亮仅在本机读取目标文字的小块画面，不保存、不上传。可在界面设置中关闭。")
             DisclosureGroup(L("详细说明")) {
                 VStack(alignment:.leading,spacing:12){note("开启智能释义后，所选文字和附近上下文会发送至你配置的服务。关闭后，离线查询完全在本机完成。");note("仅识别指针附近的一小块画面。截图不保存、不上传；识别出的目标行可用于在线释义。首次初始化可能较慢，图片和复杂排版仍在适配。需要 macOS 15.2 或更新版本。")}.padding(.top,12)
             }.font(.system(size:12))

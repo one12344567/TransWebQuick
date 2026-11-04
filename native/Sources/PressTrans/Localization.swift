@@ -41,6 +41,9 @@ enum AppLanguage {
         return system.hasPrefix("zh") ? (system.contains("Hant") || system.contains("TW") || system.contains("HK") ? "zh-Hant":"zh-Hans"):"en"
     }
     static let english:[String:String]=[
+"清晰高亮":"Clear text highlight",
+"仅在本机读取目标文字的小块画面，黄色避开笔画；无录屏权限时使用描边。":"Reads a small local crop to keep yellow off the glyphs. Uses an outline without screen recording access.",
+"清晰高亮仅在本机读取目标文字的小块画面，不保存、不上传。可在界面设置中关闭。":"Clear text highlighting reads a small local text crop, never saved or uploaded. Turn it off in Appearance.",
 "用量":"Usage",
 "今日 tokens":"Tokens today",
 "累计 tokens":"Total tokens",

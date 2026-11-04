@@ -29,6 +29,7 @@ struct AppearanceView:View {
     @AppStorage("popupFontSize") private var fontSize=20.0
     @AppStorage("popupInk") private var ink="automatic"
     @AppStorage("popupOpacity") private var opacity=0.92
+    @AppStorage("preciseHighlightEnabled") private var preciseHighlight=true
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorSchemeContrast) private var contrast
@@ -62,7 +63,11 @@ struct AppearanceView:View {
                 }.frame(width:200,alignment:.leading)}
                 HStack {Text(L("透明度"));Spacer();HStack {Image(systemName:"square.dashed");Slider(value:$opacity,in:0.80...1).accessibilityLabel(L("透明度"));Image(systemName:"square.fill")}.foregroundStyle(.secondary).frame(width:200).disabled(popupStyle != "glass" || reduceTransparency || contrast == .increased)}
             }.font(.system(size:13))
-            HStack {Button(L("预览浮窗"),action:showPopover).buttonStyle(.link);Spacer();Button(L("恢复默认")){menuStyle="glass";popupStyle="glass";font="system";fontSize=20;ink="automatic";opacity=0.92}.buttonStyle(.link)}.font(.system(size:12))
+            HStack {
+                Text(L("清晰高亮"));Spacer()
+                Toggle(L("清晰高亮"),isOn:$preciseHighlight).labelsHidden().toggleStyle(.switch).controlSize(.small).frame(width:200,alignment:.leading)
+            }.font(.system(size:13)).help(L("仅在本机读取目标文字的小块画面，黄色避开笔画；无录屏权限时使用描边。"))
+            HStack {Button(L("预览浮窗"),action:showPopover).buttonStyle(.link);Spacer();Button(L("恢复默认")){menuStyle="glass";popupStyle="glass";font="system";fontSize=20;ink="automatic";opacity=0.92;preciseHighlight=true}.buttonStyle(.link)}.font(.system(size:12))
         }
     }
     private func section<Content:View>(_ title:String,@ViewBuilder content:()->Content)->some View {

@@ -46,6 +46,8 @@
 
 当前只保存一套正在使用的服务配置，切换服务并保存会替换原配置。在线查询时，选中文字和附近上下文直接发送到配置的服务商；OCR 图像不上传。请不要把密钥贴到公开文档、截图或反馈中。
 
+“界面 → 清晰高亮”在已有录屏授权时，也会读取目标文字的小块本地画面，用于贴合字形、保持文字清晰；不保存、不上传，不消耗 token。它与取词失败时的 OCR 回退相互独立，可单独关闭。
+
 ## 排查
 
 “用量”页从 0.5 版起记录每次在线调用，展开浮窗也可看到本次总量。输入、输出及缓存命中来自服务商返回的 `usage`，不会额外发起统计请求。实现同时处理 [DeepSeek 的最后一个内容块](https://api-docs.deepseek.com/api/create-chat-completion/)和 [OpenAI 的独立 usage 块](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create)。请求启用 `stream_options.include_usage`，自定义服务需支持该兼容参数。断流、取消或服务未返回用量时标为“未返回”，不代表免费；以服务商账单为准。
@@ -66,3 +68,5 @@ In **Services → Configure…**, select a provider, verify its Base URL and mod
 Custom services must support OpenAI-compatible Chat Completions with streaming SSE. The app appends `/chat/completions` once. Remote URLs require HTTPS; loopback HTTP is supported for local services. Provider regions, model access and API billing must match your account. Chat subscriptions do not necessarily include API credit.
 
 Only one active service configuration is stored. Keys are kept in the app's local data folder, bound to the saved endpoint, and never forwarded through redirects. Changing endpoints requires saving a key again. The offline dictionary supports **English → Simplified Chinese only**. Other language pairs require a working online service. Provider presets have not all been tested with paid accounts.
+
+**Appearance → Clear text highlight** also reads a small local text crop when screen recording is already authorized, independently of OCR fallback. It preserves glyph contrast and trims the highlight, saves/uploads no images and uses no tokens. It can be disabled separately.

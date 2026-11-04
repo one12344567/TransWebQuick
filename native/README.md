@@ -78,6 +78,8 @@ Option-Shift-P 查询指针下的词，与重按共用路径；Option-Shift-T �
 
 可选“取词失败时使用屏幕识字”默认关闭。仅主动指针查询且 AX 读取失败时，ScreenCaptureKit 截取指针附近至多 640×260 点的可见区域；Vision 在本机识别，选择包围指针的字词，附近上下文只使用同一识别行。图片不落盘、不上传，不创建持续录制流。拒绝安全输入框，不使用 OCR 绕过权限拒绝。开启在线释义时，识别出的目标和目标行仍会按在线设置发送给 DeepSeek。OCR 不能保证所有语言、低清文字、竖排或复杂排版正确。
 
+“界面 → 清晰高亮”是独立的显示功能，默认开启。已有录屏权限时，每次主动查询会在本机读取目标文字的小块画面，即使 AX 取词已成功，也会用它收紧高亮边界并保留笔画颜色。画面不保存、不上传，不经过 OCR 或模型。关闭该选项、未授权、macOS 15.2 以下或背景无法可靠分离时使用黄色描边，不覆盖文字；不会自动申请录屏权限。
+
 在线释义支持外语→中文；中文默认先给英语译文再用中文解释，可选择其他目标语言或仅中文释义。代码/符号优先解释实际作用。当前 DeepSeek 官方 deepseek-flash 支持图片输入（见官方 Vision 文档），本版选择本地 OCR + 文本释义，不发送屏幕图片。
 
 ## Languages and online services (0.3)
@@ -107,3 +109,9 @@ Usage shows today/all-time reported tokens and individual requests (time, provid
 Only metadata and counters are stored in `~/Library/Application Support/PressTrans/usage.sqlite` (0600); no selected text, context, answers, keys or endpoint URLs. SQLite uses a 256 KB page cache and history reads at most 50 rows per page. A 1,000-record local fixture occupied 184,320 bytes, including indexes. Record size varies with provider/model names. The view displays actual file size. This is usage tracking, not a currency billing estimate.
 
 Highlight geometry no longer has a fixed 3 pt outer inset or a scaling transform. It snaps outward to physical pixels; bounded character-range queries separate visual lines where the host exposes glyph bounds. Pointer ranges that do not actually contain the pointer are rejected. The popup reveals around its arrow tip with a damped spring and short fade instead of simultaneous window movement and centre scaling. This approximates a native feel; no claim is made that it uses Apple's private Look Up animation parameters or that every application returns accurate text bounds.
+
+### Glyph-preserving yellow highlight (0.5.1)
+
+Clear Text Highlight uses one transient local crop to distinguish text strokes from the background, trim line-box whitespace to the visible glyph bounds, and apply brighter yellow while leaving solid strokes transparent. Antialiased edges change only their estimated background component; dark surfaces use a lower tint strength to preserve white text contrast. It does not reconstruct fonts or modify the host document. Animated or textured backgrounds may fall back to an outline, and host text ranges must still be accurate.
+
+The crop is bounded to 1,600 × 240 points, at most 180,000 square points / 1,000,000 pixels, and 24 text ranges. Processing is serialized outside the UI actor. Closing or replacing the lookup cancels pending work, rejects stale results and releases the overlay. Source images are transient and never saved, uploaded or retained as history. This capture is independent of OCR fallback; local preset demonstrations still capture nothing and make no online requests.

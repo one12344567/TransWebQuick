@@ -81,19 +81,24 @@ import PressTransCore
     private let window:NSPanel
     private var generation=UUID()
     private let fill=CAShapeLayer()
+    private let imageView=NSImageView()
+    private var maskTask:Task<Void,Never>?
     init() {
         window=NSPanel(contentRect:.zero,styleMask:[.borderless,.nonactivatingPanel],backing:.buffered,defer:false)
         window.isOpaque=false;window.backgroundColor = .clear;window.hasShadow=false
         window.ignoresMouseEvents=true;window.hidesOnDeactivate=false;window.isReleasedWhenClosed=false
         window.level = .floating;window.collectionBehavior=[.canJoinAllSpaces,.fullScreenAuxiliary]
         let view=NSView();view.wantsLayer=true
-        fill.fillColor=NSColor(calibratedRed:1,green:0.86,blue:0.08,alpha:0.38).cgColor
-        fill.strokeColor=NSColor(calibratedRed:0.8,green:0.6,blue:0.04,alpha:0.18).cgColor;fill.lineWidth=0.5
+        fill.fillColor=NSColor.clear.cgColor
+        fill.strokeColor=NSColor(calibratedRed:0.96,green:0.71,blue:0.02,alpha:0.95).cgColor;fill.lineWidth=1.25
         view.layer?.addSublayer(fill)
+        imageView.imageScaling = .scaleAxesIndependently;imageView.setAccessibilityElement(false);view.addSubview(imageView)
         view.setAccessibilityElement(false);window.contentView=view
     }
     func show(rects:[CGRect]) {
-        generation=UUID()
+        maskTask?.cancel();maskTask=nil;generation=UUID()
+        let current=generation
+        window.orderOut(nil);imageView.image=nil
         let aligned=rects.prefix(24).compactMap {rect->CGRect? in
             guard rect.width>1,rect.height>4,rect.width<1600,rect.height<60,
                   let screen=NSScreen.screens.first(where:{$0.frame.intersects(rect)}) else{return nil}
@@ -107,16 +112,33 @@ import PressTransCore
         CATransaction.begin();CATransaction.setDisableActions(true)
         fill.frame=CGRect(origin:.zero,size:frame.size);fill.path=path
         CATransaction.commit()
+        imageView.frame=CGRect(origin:.zero,size:frame.size)
+        let precise=UserDefaults.standard.object(forKey:"preciseHighlightEnabled") as? Bool ?? true
+        if precise,CGPreflightScreenCaptureAccess() {
+            let top=NSScreen.screens.first?.frame.maxY ?? 0
+            let region=HighlightGeometry.appKitRect(frame,primaryTop:top)
+            let targets=aligned.map{HighlightGeometry.appKitRect($0,primaryTop:top)}
+            maskTask=Task { [weak self] in
+                let mask=await GlyphHighlightCapture.shared.mask(region:region,targets:targets)
+                guard let self,!Task.isCancelled,self.generation==current else{return}
+                self.fill.isHidden=mask != nil
+                self.imageView.image=mask.map{NSImage(cgImage:$0,size:frame.size)}
+                self.reveal()
+            }
+        } else {fill.isHidden=false;reveal()}
+    }
+    private func reveal() {
         window.alphaValue=0;window.orderFrontRegardless()
         guard !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else{window.alphaValue=1;return}
         // Geometry stays fixed throughout the reveal, so the original glyphs never drift relative to the tint.
         NSAnimationContext.runAnimationGroup{ctx in ctx.duration=0.14;ctx.timingFunction=CAMediaTimingFunction(name:.easeOut);window.animator().alphaValue=1}
     }
     func hide() {
+        maskTask?.cancel();maskTask=nil
         let current=UUID();generation=current
-        guard window.isVisible else{return}
+        guard window.isVisible else{imageView.image=nil;return}
         NSAnimationContext.runAnimationGroup({ctx in
             ctx.duration=NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0:0.1;window.animator().alphaValue=0
-        },completionHandler:{[weak self] in Task { @MainActor in guard let self,self.generation==current else{return};self.window.orderOut(nil) }})
+        },completionHandler:{[weak self] in Task { @MainActor in guard let self,self.generation==current else{return};self.window.orderOut(nil);self.imageView.image=nil }})
     }
 }
