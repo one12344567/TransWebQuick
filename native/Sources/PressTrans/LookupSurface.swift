@@ -2,6 +2,9 @@ import AppKit
 import SwiftUI
 import PressTransCore
 
+private final class LookupHostingView:NSHostingView<LookupView> {
+    override func acceptsFirstMouse(for event:NSEvent?)->Bool {true}
+}
 /// Native blur and a bounded reading tint share the same pointer-shaped surface.
 @MainActor final class LookupSurface:NSView {
     private let effect=NSVisualEffectView()
@@ -14,9 +17,10 @@ import PressTransCore
     var pointerX:CGFloat? {didSet{needsLayout=true}}
     static let tip:CGFloat=10
     init(model:LookupModel,close:@escaping()->Void) {
-        host=NSHostingView(rootView:LookupView(model:model,close:close))
+        host=LookupHostingView(rootView:LookupView(model:model,close:close))
         super.init(frame:.zero)
         wantsLayer=true
+        host.sizingOptions=[];host.clipsToBounds=true
         effect.material = .popover;effect.blendingMode = .behindWindow;effect.state = .active
         tone.wantsLayer=true;tone.layer?.mask=toneMask
         addSubview(effect);addSubview(tone);addSubview(host)
@@ -28,11 +32,16 @@ import PressTransCore
     required init?(coder:NSCoder){nil}
     override func layout() {
         super.layout()
+        // Frame, material mask and reading tint must commit together. Implicit layer animations
+        // otherwise trail the window resize and briefly wash out / displace the hosted text.
+        CATransaction.begin();CATransaction.setDisableActions(true)
+        defer {CATransaction.commit()}
         let inset:CGFloat=pointerX == nil ? 0:Self.tip
         let desiredAppearance=PopupAppearance.style == "graphite" ? NSAppearance(named:.darkAqua):nil
         if appearance?.name != desiredAppearance?.name {appearance=desiredAppearance}
         effect.frame=bounds;tone.frame=bounds
         host.frame=NSRect(x:0,y:pointsUp ? 0:inset,width:bounds.width,height:bounds.height-inset)
+        host.layoutSubtreeIfNeeded()
         let body=NSRect(x:0.5,y:pointsUp ? 0.5:inset+0.5,width:bounds.width-1,height:bounds.height-inset-1)
         let shape=NSBezierPath(roundedRect:body,xRadius:14,yRadius:14)
         if let pointerX {
