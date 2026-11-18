@@ -53,6 +53,7 @@ import PressTransCore
         precondition(parser.line("data: 中文")==nil);precondition(parser.line("data: 第二行")==nil);precondition(parser.line("")=="中文\n第二行")
         precondition(parser.line(": heartbeat")==nil);precondition(parser.line("")==nil)
         precondition(parser.line("data: [DONE]")==nil);precondition(parser.line("")=="[DONE]")
+        checkStreamedAnswer()
         print("4 Swift core checks passed: context budget, limited input, answer hierarchy, SSE framing")
         if let path = ProcessInfo.processInfo.environment["PRESSTRANS_DICTIONARY"] {
             let dictionary = try OfflineDictionary(path:path)

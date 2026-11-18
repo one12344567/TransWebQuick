@@ -16,10 +16,11 @@ final class LookupPanel:NSPanel {
     private var observers:[NSObjectProtocol]=[]
     private var visibility=UUID()
     private var changes:AnyCancellable?
-    private var anchor:CGRect?
+    private var hasTextAnchor=false
+    private var presentationArea=CGRect.zero
+    private var visibleBounds=CGRect.zero
     private var lastDisclosure=[false,false,false]
     private var panelHeight:CGFloat=154
-    private var presentationPoint=CGPoint.zero
     private var displayLink:CADisplayLink?
     private var lastFrameTime:CFTimeInterval=0
     private var heightMotion=DisclosureMotion(154)
@@ -38,7 +39,7 @@ final class LookupPanel:NSPanel {
             let paragraph=NSMutableParagraphStyle();paragraph.lineSpacing=spacing
             return ceil((text as NSString).boundingRect(with:NSSize(width:340,height:4000),options:[.usesLineFragmentOrigin,.usesFontLeading],attributes:[.font:font,.paragraphStyle:paragraph]).height)
         }
-        let parts=AnswerParts.split(model.answer)
+        let parts=model.answerParts
         // Header, padding and toolbar stay fixed; only visible content contributes to height.
         var result:CGFloat=115 // padding 26 + header 32 + gap 8 + divider/gaps 13 + toolbar 36
         if model.loading && model.answer.isEmpty {result+=28}
@@ -53,20 +54,13 @@ final class LookupPanel:NSPanel {
             result+=sections.reduce(0,+)+CGFloat(sections.count)*14
         }
         if !model.message.isEmpty && !model.loading && (model.expanded || model.answer.isEmpty) {result+=14+height(model.message,.systemFont(ofSize:12))}
-        let screen=screenAnchor().flatMap{area in NSScreen.screens.first(where:{$0.frame.intersects(area)})} ?? NSScreen.main
-        return min(max(result,154),min(model.expanded ? 560:320,(screen?.visibleFrame.height ?? 800)-40))
-    }
-    private func screenAnchor()->CGRect? {
-        guard let anchor,let primary=NSScreen.screens.first else{return nil}
-        return HighlightGeometry.appKitRect(anchor,primaryTop:primary.frame.maxY)
+        return min(max(result,154),min(model.expanded ? 560:320,visibleBounds.height-40))
     }
     private func targetFrame() -> NSRect {
-        let area=screenAnchor() ?? NSRect(origin:presentationPoint,size:.zero)
-        let screen=NSScreen.screens.first(where:{$0.frame.intersects(area) || $0.frame.contains(area.origin)}) ?? NSScreen.main!
-        let bounds=screen.visibleFrame, height=panelHeight+(anchor == nil ? 0:LookupSurface.tip)
+        let area=presentationArea, bounds=visibleBounds
+        let height=panelHeight+(hasTextAnchor ? LookupSurface.tip:0)
         let y=placedBelow ? area.minY-height-6:area.maxY+6
         let frame=NSRect(x:min(max(area.midX-190,bounds.minX+12),bounds.maxX-392),y:min(max(y,bounds.minY+12),bounds.maxY-height-12),width:380,height:height)
-        surface.pointsUp=placedBelow;surface.pointerX=anchor == nil ? nil:area.midX-frame.minX
         return frame
     }
     private func resize() {
@@ -91,17 +85,24 @@ final class LookupPanel:NSPanel {
         guard panel.isVisible else{stopLayout();return}
         let now=CACurrentMediaTime(),dt=max(0,now-lastFrameTime);lastFrameTime=now
         heightMotion.advance(dt);detailMotion.advance(dt);contextMotion.advance(dt);dictionaryMotion.advance(dt)
-        applyLayout()
-        if abs(heightMotion.value-heightMotion.target)<0.15 && abs(heightMotion.velocity)<2 && detailMotion.settled && contextMotion.settled && dictionaryMotion.settled {finishLayout()}
+        if abs(heightMotion.value-heightMotion.target)<0.15 && abs(heightMotion.velocity)<2 && detailMotion.settled && contextMotion.settled && dictionaryMotion.settled {
+            finishLayout()
+        } else {
+            applyLayout()
+        }
     }
     private func applyLayout() {
         applyingPresentation=true
         CATransaction.begin();CATransaction.setDisableActions(true)
         var transaction=Transaction(animation:nil);transaction.disablesAnimations=true
         withTransaction(transaction) {
-            model.disclosure = .init(detail:min(1,max(0,detailMotion.value)),context:min(1,max(0,contextMotion.value)),dictionary:min(1,max(0,dictionaryMotion.value)))
+            let progress = LookupModel.DisclosureProgress(detail: min(1, max(0, detailMotion.value)),
+                                                          context: min(1, max(0, contextMotion.value)),
+                                                          dictionary: min(1, max(0, dictionaryMotion.value)))
+            if model.disclosure != progress { model.disclosure = progress }
             panelHeight=heightMotion.value
-            panel.setFrame(targetFrame(),display:false)
+            let frame = targetFrame()
+            if panel.frame != frame { panel.setFrame(frame, display: false) }
             surface.layoutSubtreeIfNeeded()
         }
         CATransaction.commit()
@@ -129,19 +130,10 @@ final class LookupPanel:NSPanel {
             // Coalesce one model update, without delaying a user's click behind streaming throttling.
             DispatchQueue.main.async { [weak self] in self?.resizeQueued=false;self?.resize() }
         }
-        globalMonitor=NSEvent.addGlobalMonitorForEvents(matching:[.leftMouseDown,.rightMouseDown,.scrollWheel,.keyDown]) { [weak self] event in
-            Task { @MainActor in if self?.menuTracking != true && (event.type != .keyDown || event.keyCode==53) { self?.hide() } }
-        }
-        localMonitor=NSEvent.addLocalMonitorForEvents(matching:[.keyDown,.leftMouseDown]) { [weak self] event in
-            guard let self, self.panel.isVisible, !self.menuTracking else { return event }
-            if event.type == .keyDown && event.keyCode==53 { self.hide(); return nil }
-            if event.type == .leftMouseDown && event.window !== self.panel { self.hide() }
-            return event
-        }
         observers.append(NotificationCenter.default.addObserver(forName:UserDefaults.didChangeNotification,object:nil,queue:.main){[weak self] _ in
-            Task { @MainActor in self?.surface.needsLayout=true;self?.resize() }
+            Task { @MainActor in self?.surface.invalidateSurfaceAppearance();self?.resize() }
         })
-        observers.append(NSWorkspace.shared.notificationCenter.addObserver(forName:NSWorkspace.accessibilityDisplayOptionsDidChangeNotification,object:nil,queue:.main){[weak self] _ in Task { @MainActor in self?.surface.needsLayout=true;if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {self?.finishLayout()} }})
+        observers.append(NSWorkspace.shared.notificationCenter.addObserver(forName:NSWorkspace.accessibilityDisplayOptionsDidChangeNotification,object:nil,queue:.main){[weak self] _ in Task { @MainActor in self?.surface.invalidateSurfaceAppearance();if self?.displayLink != nil && NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {self?.finishLayout()} }})
         observers.append(NotificationCenter.default.addObserver(forName:NSMenu.didBeginTrackingNotification,object:nil,queue:.main){[weak self] _ in MainActor.assumeIsolated {self?.menuTracking=true}})
         observers.append(NotificationCenter.default.addObserver(forName:NSMenu.didEndTrackingNotification,object:nil,queue:.main){[weak self] _ in MainActor.assumeIsolated {self?.menuTracking=false}})
         observers.append(NSWorkspace.shared.notificationCenter.addObserver(forName:NSWorkspace.didActivateApplicationNotification,object:nil,queue:.main){[weak self] note in
@@ -149,21 +141,52 @@ final class LookupPanel:NSPanel {
         })
         observers.append(NotificationCenter.default.addObserver(forName:NSApplication.didChangeScreenParametersNotification,object:nil,queue:.main){[weak self] _ in Task { @MainActor in self?.hide() }})
     }
+    // These monitors can receive every scroll or key press in other apps. Their lifetime
+    // follows the popup, including the brief delay before an anchored popup appears.
+    private func startDismissalMonitors() {
+        guard globalMonitor == nil, localMonitor == nil else { return }
+        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .scrollWheel, .keyDown]) { [weak self] event in
+            guard event.type != .keyDown || event.keyCode == 53 else { return }
+            MainActor.assumeIsolated {
+                guard let self, !self.menuTracking else { return }
+                self.hide()
+            }
+        }
+        localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .leftMouseDown]) { [weak self] event in
+            guard let self, !self.menuTracking else { return event }
+            if event.type == .keyDown && event.keyCode == 53 { self.hide(); return nil }
+            if event.type == .leftMouseDown && event.window !== self.panel { self.hide() }
+            return event
+        }
+    }
+    private func stopDismissalMonitors() {
+        if let globalMonitor { NSEvent.removeMonitor(globalMonitor) }
+        if let localMonitor { NSEvent.removeMonitor(localMonitor) }
+        globalMonitor = nil
+        localMonitor = nil
+    }
     func show(anchor:CGRect?=nil,highlightRects:[CGRect]=[]) {
         showTask?.cancel();stopLayout();visibility=UUID();dismissing=false
-        self.anchor=anchor
-        presentationPoint=NSEvent.mouseLocation
+        let screens = NSScreen.screens
+        guard let primary = screens.first else { hide(); return }
+        let textArea = anchor.map { HighlightGeometry.appKitRect($0, primaryTop: primary.frame.maxY) }
+        hasTextAnchor = textArea != nil
+        presentationArea = textArea ?? CGRect(origin: NSEvent.mouseLocation, size: .zero)
+        let screen = screens.first { $0.frame.intersects(presentationArea) || $0.frame.contains(presentationArea.origin) } ?? primary
+        visibleBounds = screen.visibleFrame
+        startDismissalMonitors()
         panelHeight=desiredHeight();lastDisclosure=[model.expanded,model.contextExpanded,model.dictionaryExpanded]
         heightMotion.snap(panelHeight);detailMotion.snap(model.expanded ? 1:0)
         contextMotion.snap(model.contextExpanded ? 1:0);dictionaryMotion.snap(model.dictionaryExpanded ? 1:0)
         model.disclosure = .init(detail:detailMotion.value,context:contextMotion.value,dictionary:dictionaryMotion.value)
-        if let area=screenAnchor() {
-            let bounds=(NSScreen.screens.first(where:{$0.frame.intersects(area)}) ?? NSScreen.main!).visibleFrame
-            placedBelow=area.minY-bounds.minY >= min(400,panelHeight)+20
-            let fragments=highlightRects.isEmpty ? [area]:highlightRects.map{HighlightGeometry.appKitRect($0,primaryTop:NSScreen.screens.first?.frame.maxY ?? 0)}
+        if let area=textArea {
+            placedBelow=area.minY-visibleBounds.minY >= min(400,panelHeight)+20
+            let fragments=highlightRects.isEmpty ? [area]:highlightRects.map{HighlightGeometry.appKitRect($0,primaryTop:primary.frame.maxY)}
             highlight.show(rects:fragments)
         } else {placedBelow=true;highlight.hide()}
         let target=targetFrame(), reduce=NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        surface.pointsUp=placedBelow
+        surface.pointerX=textArea.map { $0.midX-target.minX }
         panel.orderOut(nil);panel.alphaValue=0
         panel.setFrame(target,display:false)
         surface.layoutSubtreeIfNeeded()
@@ -172,6 +195,7 @@ final class LookupPanel:NSPanel {
             if !reduce && anchor != nil {try? await Task.sleep(nanoseconds:35_000_000)}
             guard let self,!Task.isCancelled,self.visibility==current else{return}
             if self.model.preview {self.panel.makeKeyAndOrderFront(nil)} else {self.panel.orderFrontRegardless()}
+            self.resize() // Include any answer that arrived during the presentation delay.
             NSAnimationContext.runAnimationGroup({ctx in
                 ctx.duration=reduce ? 0:0.16;ctx.timingFunction=CAMediaTimingFunction(name:.easeOut)
                 self.panel.animator().alphaValue=1
@@ -182,6 +206,8 @@ final class LookupPanel:NSPanel {
         }
     }
     func hide() {
+        guard !dismissing, globalMonitor != nil || localMonitor != nil || showTask != nil || panel.isVisible else { return }
+        stopDismissalMonitors()
         dismissing=true;showTask?.cancel();showTask=nil;stopLayout();highlight.hide()
         guard panel.isVisible else {visibility=UUID();model.cancel();return}
         model.cancel(); let id=UUID(); visibility=id

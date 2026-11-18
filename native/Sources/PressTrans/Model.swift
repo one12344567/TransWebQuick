@@ -7,7 +7,10 @@ import PressTransCore
     @Published var disclosure=DisclosureProgress()
     var onDisclosureChange:(()->Void)?
     @Published var selection=""
-    @Published var answer=""
+    // Both the height calculation and SwiftUI consume the same split while the answer animates.
+    private(set) var answerParts = (meaning: "", explanation: "")
+    @Published var answer="" { didSet { answerParts = AnswerParts.split(answer) } }
+    private(set) var onlineAvailableForLookup = false
     @Published var source=""
     @Published var context=""
     @Published var message=""
@@ -40,6 +43,7 @@ import PressTransCore
         cancel(); let id=generation; loading=true; complete=false; answer=""; message=""; matchNote=""; offline=false;dictionaryText="";dictionaryNote="";dictionaryExpanded=false;usageRecord=nil
         let policy=TranslationPreferences.policy
         let enabled=TranslationPreferences.onlineEnabled && Credentials.load() != nil
+        onlineAvailableForLookup = enabled
         let online:LookupEngine.Online?
         if enabled {
             online = { [weak self] sink in try await Translator.run(snapshot,detail:detail,policy:policy,onText:sink,onRecord:{[weak self] record in
@@ -51,10 +55,18 @@ import PressTransCore
             await LookupEngine.run(local:{supported ? await DictionaryStore.shared?.lookup(snapshot.selection):nil},online:online) { [weak self] update in
                 await MainActor.run { [weak self] in
                     guard let self, self.generation==id else {return}
-                    self.answer=update.text; self.matchNote = update.offline ? (supported ? L(update.note):L("离线词典仅支持英语到简体中文；当前语言需要在线服务。")):""
-                    self.message = !supported && update.offline && !update.loading ? L("当前语言的在线释义不可用，请检查服务配置或稍后重试。") : L(update.message)
-                    self.loading=update.loading; self.complete=update.complete; self.offline=update.offline
-                    self.dictionaryText=update.reference?.text ?? "";self.dictionaryNote=update.reference.map{L($0.note)} ?? ""
+                    let note = update.offline ? (supported ? L(update.note) : L("离线词典仅支持英语到简体中文；当前语言需要在线服务。")) : ""
+                    let message = !supported && update.offline && !update.loading ? L("当前语言的在线释义不可用，请检查服务配置或稍后重试。") : L(update.message)
+                    let dictionary = update.reference?.text ?? ""
+                    let dictionaryNote = update.reference.map { L($0.note) } ?? ""
+                    if self.answer != update.text { self.answer = update.text }
+                    if self.matchNote != note { self.matchNote = note }
+                    if self.message != message { self.message = message }
+                    if self.loading != update.loading { self.loading = update.loading }
+                    if self.complete != update.complete { self.complete = update.complete }
+                    if self.offline != update.offline { self.offline = update.offline }
+                    if self.dictionaryText != dictionary { self.dictionaryText = dictionary }
+                    if self.dictionaryNote != dictionaryNote { self.dictionaryNote = dictionaryNote }
                 }
             }
             guard let self, self.generation==id else {return}
@@ -80,7 +92,7 @@ struct LookupView: View {
     @Environment(\.colorScheme) private var colorScheme
     @ObservedObject var model:LookupModel
     var close:()->Void
-    private var parts:(meaning:String,explanation:String) {AnswerParts.split(model.answer)}
+    private var parts:(meaning:String,explanation:String) {model.answerParts}
     private func copy(_ text:String) {NSPasteboard.general.clearContents();NSPasteboard.general.setString(text,forType:.string)}
     var body:some View {
         VStack(alignment:.leading,spacing:0) {
@@ -153,7 +165,7 @@ struct LookupView: View {
                         if !model.selection.isEmpty {Button(L("复制原文")){copy(model.selection)}}
                         if !model.answer.isEmpty {Button(L("复制完整释义")){copy(model.answer)}}
                         if !model.context.isEmpty {Button(L("复制上下文")){copy(model.context)}}
-                        if !model.preview && model.snapshot != nil && TranslationPreferences.onlineEnabled && Credentials.load() != nil {
+                        if !model.preview && model.snapshot != nil && model.onlineAvailableForLookup {
                             Divider()
                             Button(L("进一步解释")){model.query(detail:true)}.disabled(model.loading)
                             Button(L("重试在线")){model.query()}.disabled(model.loading)

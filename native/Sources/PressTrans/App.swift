@@ -18,7 +18,8 @@ import PressTransCore
     var captureTask:Task<Void,Never>?
     let state=ApplicationState()
     var languageObserver:NSObjectProtocol?
-    var permissionTimer:Timer?
+    private var permissionTimer:Timer?
+    private var settingsActivationObserver:NSObjectProtocol?
     var terminateSignal:DispatchSourceSignal?
     func applicationDidFinishLaunching(_ notification:Notification) {
         panel=PanelController()
@@ -119,17 +120,57 @@ import PressTransCore
             self.hideSettings();self.panel.model.show(context);self.panel.show()
         }))
         NSApp.setActivationPolicy(.regular)
-        state.refreshPermission();permissionTimer?.invalidate()
-        permissionTimer=Timer.scheduledTimer(withTimeInterval:1,repeats:true){[weak self] _ in Task { @MainActor in self?.state.refreshPermission() }}
+        state.refreshPermission()
         NSApp.activate(ignoringOtherApps:true);window?.makeKeyAndOrderFront(nil)
+        observePermissionEditing()
+    }
+    private func observePermissionEditing() {
+        if settingsActivationObserver == nil {
+            settingsActivationObserver = NSWorkspace.shared.notificationCenter.addObserver(
+                forName:NSWorkspace.didActivateApplicationNotification, object:nil, queue:.main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    self?.state.refreshPermission()
+                    self?.updatePermissionMonitoring()
+                }
+            }
+        }
+        updatePermissionMonitoring()
+    }
+    private func updatePermissionMonitoring() {
+        // Keep a side-by-side permission guide live during edits in System Settings.
+        // The application activation and lookup paths refresh immediately on return or use.
+        let editing = NSWorkspace.shared.frontmostApplication?.bundleIdentifier == "com.apple.systempreferences"
+        guard settingsActivationObserver != nil, editing, let window, window.isVisible,
+              window.occlusionState.contains(.visible), !window.isMiniaturized else {
+            if let permissionTimer {
+                permissionTimer.invalidate()
+                self.permissionTimer = nil
+            }
+            return
+        }
+        guard permissionTimer == nil else { return }
+        state.refreshPermission()
+        let timer = Timer.scheduledTimer(withTimeInterval:1, repeats:true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.state.refreshPermission() }
+        }
+        timer.tolerance = 0.25
+        permissionTimer = timer
+    }
+    private func stopPermissionMonitoring() {
+        if let settingsActivationObserver { NSWorkspace.shared.notificationCenter.removeObserver(settingsActivationObserver) }
+        settingsActivationObserver = nil
+        permissionTimer?.invalidate()
+        permissionTimer = nil
     }
     func setMenuVisible(_ visible:Bool) {state.menuVisible=visible;item.isVisible=visible;UserDefaults.standard.set(!visible,forKey:"menuBarHidden")}
     @objc func hideMenuBar() {setMenuVisible(false)}
     @objc func closeSettings() {window?.close()}
-    func hideSettings() {window?.orderOut(nil);permissionTimer?.invalidate();permissionTimer=nil;NSApp.setActivationPolicy(.accessory)}
+    func hideSettings() {stopPermissionMonitoring();window?.orderOut(nil);NSApp.setActivationPolicy(.accessory)}
     func windowWillClose(_ notification:Notification) {hideSettings()}
+    func windowDidChangeOcclusionState(_ notification:Notification) {updatePermissionMonitoring()}
     func applicationDidBecomeActive(_ notification:Notification) {state.refreshPermission()}
     func applicationShouldHandleReopen(_ sender:NSApplication,hasVisibleWindows flag:Bool)->Bool {settings();return true}
     @objc func quit() { NSApp.terminate(nil) }
-    func applicationWillTerminate(_ notification:Notification) { captureTask?.cancel();panel.model.cancel();permissionTimer?.invalidate();state.setForce(false);if let hotkey{UnregisterEventHotKey(hotkey)};if let pointerHotkey{UnregisterEventHotKey(pointerHotkey)};if let eventHandler{RemoveEventHandler(eventHandler)} }
+    func applicationWillTerminate(_ notification:Notification) { captureTask?.cancel();panel.model.cancel();stopPermissionMonitoring();state.setForce(false);if let hotkey{UnregisterEventHotKey(hotkey)};if let pointerHotkey{UnregisterEventHotKey(pointerHotkey)};if let eventHandler{RemoveEventHandler(eventHandler)} }
 }

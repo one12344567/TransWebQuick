@@ -13,8 +13,17 @@ private final class LookupHostingView:NSHostingView<LookupView> {
     private let outline=CAShapeLayer()
     private let innerRim=CAShapeLayer()
     private let host:NSHostingView<LookupView>
-    var pointsUp=true {didSet{needsLayout=true}}
-    var pointerX:CGFloat? {didSet{needsLayout=true}}
+    private struct MaskGeometry: Equatable {
+        var width: CGFloat
+        var pointerX: CGFloat?
+        var pointsUp: Bool
+    }
+
+    private var maskGeometry: MaskGeometry?
+    private var surfaceSize = CGSize.zero
+    private var appearanceNeedsUpdate = true
+    var pointsUp = true { didSet { if oldValue != pointsUp { needsLayout = true } } }
+    var pointerX: CGFloat? { didSet { if oldValue != pointerX { needsLayout = true } } }
     static let tip:CGFloat=10
     init(model:LookupModel,close:@escaping()->Void) {
         host=LookupHostingView(rootView:LookupView(model:model,close:close))
@@ -32,44 +41,107 @@ private final class LookupHostingView:NSHostingView<LookupView> {
     required init?(coder:NSCoder){nil}
     override func layout() {
         super.layout()
-        // Frame, material mask and reading tint must commit together. Implicit layer animations
-        // otherwise trail the window resize and briefly wash out / displace the hosted text.
-        CATransaction.begin();CATransaction.setDisableActions(true)
-        defer {CATransaction.commit()}
-        let inset:CGFloat=pointerX == nil ? 0:Self.tip
-        let desiredAppearance=PopupAppearance.style == "graphite" ? NSAppearance(named:.darkAqua):nil
-        if appearance?.name != desiredAppearance?.name {appearance=desiredAppearance}
-        effect.frame=bounds;tone.frame=bounds
-        host.frame=NSRect(x:0,y:pointsUp ? 0:inset,width:bounds.width,height:bounds.height-inset)
+        guard bounds.width > 1, bounds.height > 1 else { return }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
+
+        if appearanceNeedsUpdate {
+            appearanceNeedsUpdate = false
+            updateSurfaceAppearance()
+        }
+
+        let geometry = MaskGeometry(
+            width: bounds.width,
+            pointerX: pointerX.map { min(max($0, 32), bounds.width - 32) },
+            pointsUp: pointsUp
+        )
+        let needsMask = geometry != maskGeometry
+        guard needsMask || surfaceSize != bounds.size else { return }
+        surfaceSize = bounds.size
+        maskGeometry = geometry
+
+        let inset = geometry.pointerX == nil ? 0 : Self.tip
+        effect.frame = bounds
+        tone.frame = bounds
+        host.frame = NSRect(x: 0, y: pointsUp ? 0 : inset, width: bounds.width, height: max(0, bounds.height - inset))
         host.layoutSubtreeIfNeeded()
-        let body=NSRect(x:0.5,y:pointsUp ? 0.5:inset+0.5,width:bounds.width-1,height:bounds.height-inset-1)
-        let shape=NSBezierPath(roundedRect:body,xRadius:14,yRadius:14)
-        if let pointerX {
-            let x=min(max(pointerX,32),bounds.width-32)
-            let base=pointsUp ? body.maxY-1:body.minY+1
-            let apex=pointsUp ? bounds.maxY-0.5:0.5
-            shape.move(to:NSPoint(x:x-12,y:base))
-            shape.curve(to:NSPoint(x:x-3,y:apex+(pointsUp ? -1:1)),controlPoint1:NSPoint(x:x-8,y:base),controlPoint2:NSPoint(x:x-5,y:apex+(pointsUp ? -4:4)))
-            shape.curve(to:NSPoint(x:x+3,y:apex+(pointsUp ? -1:1)),controlPoint1:NSPoint(x:x-1,y:apex),controlPoint2:NSPoint(x:x+1,y:apex))
-            shape.curve(to:NSPoint(x:x+12,y:base),controlPoint1:NSPoint(x:x+5,y:apex+(pointsUp ? -4:4)),controlPoint2:NSPoint(x:x+8,y:base))
+
+        if needsMask {
+            effect.maskImage = Self.materialMask(for: geometry)
+            // AppKit follows window resizes. The silhouette can also change without a frame change.
+            window?.invalidateShadow()
+        }
+        let body = Self.bodyRect(size: bounds.size, geometry: geometry)
+        toneMask.path = Self.silhouette(size: bounds.size, geometry: geometry).cgPath
+        outline.path = CGPath(roundedRect: body, cornerWidth: 14, cornerHeight: 14, transform: nil)
+        innerRim.path = CGPath(roundedRect: body.insetBy(dx: 0.8, dy: 0.8), cornerWidth: 13, cornerHeight: 13, transform: nil)
+    }
+
+    private static func bodyRect(size: CGSize, geometry: MaskGeometry) -> CGRect {
+        let inset = geometry.pointerX == nil ? 0 : tip
+        return CGRect(x: 0.5, y: geometry.pointsUp ? 0.5 : inset + 0.5,
+                      width: size.width - 1, height: max(0, size.height - inset - 1))
+    }
+
+    private static func silhouette(size: CGSize, geometry: MaskGeometry) -> NSBezierPath {
+        let body = bodyRect(size: size, geometry: geometry)
+        let shape = NSBezierPath(roundedRect: body, xRadius: 14, yRadius: 14)
+        if let x = geometry.pointerX {
+            let up = geometry.pointsUp
+            let base = up ? body.maxY - 1 : body.minY + 1
+            let apex = up ? size.height - 0.5 : 0.5
+            shape.move(to: NSPoint(x: x - 12, y: base))
+            shape.curve(to: NSPoint(x: x - 3, y: apex + (up ? -1 : 1)),
+                        controlPoint1: NSPoint(x: x - 8, y: base), controlPoint2: NSPoint(x: x - 5, y: apex + (up ? -4 : 4)))
+            shape.curve(to: NSPoint(x: x + 3, y: apex + (up ? -1 : 1)),
+                        controlPoint1: NSPoint(x: x - 1, y: apex), controlPoint2: NSPoint(x: x + 1, y: apex))
+            shape.curve(to: NSPoint(x: x + 12, y: base),
+                        controlPoint1: NSPoint(x: x + 5, y: apex + (up ? -4 : 4)), controlPoint2: NSPoint(x: x + 8, y: base))
             shape.close()
         }
-        let mask=NSImage(size:bounds.size,flipped:false){_ in NSColor.black.setFill();shape.fill();return true}
-        effect.maskImage=mask
-        toneMask.path=shape.cgPath
-        let reduce=NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency || NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast
-        let darkSurface=effectiveAppearance.bestMatch(from:[.darkAqua,.aqua]) == .darkAqua
-        let color=darkSurface ? NSColor(calibratedWhite:0.16,alpha:1):NSColor(calibratedWhite:0.985,alpha:1)
-        tone.layer?.backgroundColor=color.withAlphaComponent(PopupAppearance.style == "glass" && !reduce ? PopupAppearance.opacity:1).cgColor
-        // The OS supplies the material and window shadow. The subtle rim adds definition on white pages.
-        let dark=effectiveAppearance.bestMatch(from:[.darkAqua,.aqua]) == .darkAqua
-        outline.path=CGPath(roundedRect:body,cornerWidth:14,cornerHeight:14,transform:nil)
-        outline.strokeColor=NSColor.black.withAlphaComponent(dark ? 0.3:0.13).cgColor
-        innerRim.path=CGPath(roundedRect:body.insetBy(dx:0.8,dy:0.8),cornerWidth:13,cornerHeight:13,transform:nil)
-        innerRim.strokeColor=NSColor.white.withAlphaComponent(dark ? 0.14:0.62).cgColor
-        window?.invalidateShadow()
+        return shape
     }
-    override func viewDidChangeEffectiveAppearance() {super.viewDidChangeEffectiveAppearance();needsLayout=true}
+
+    private static func materialMask(for geometry: MaskGeometry) -> NSImage {
+        // Both caps contain the complete pointer and corner, including their antialiased edge.
+        // Only the straight strip between them stretches as the panel changes height.
+        let cap: CGFloat = tip + 14 + 2
+        let size = NSSize(width: geometry.width, height: cap * 2 + 1)
+        let shape = silhouette(size: size, geometry: geometry)
+        let image = NSImage(size: size, flipped: false) { _ in
+            NSColor.black.setFill()
+            shape.fill()
+            return true
+        }
+        image.capInsets = NSEdgeInsets(top: cap, left: 0, bottom: cap, right: 0)
+        image.resizingMode = .stretch
+        return image
+    }
+
+    func invalidateSurfaceAppearance() {
+        appearanceNeedsUpdate = true
+        needsLayout = true
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        invalidateSurfaceAppearance()
+    }
+
+    private func updateSurfaceAppearance() {
+        let style = PopupAppearance.style
+        let override = style == "graphite" ? NSAppearance(named: .darkAqua) : nil
+        if appearance?.name != override?.name { appearance = override }
+        let dark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        let workspace = NSWorkspace.shared
+        let opaque = workspace.accessibilityDisplayShouldReduceTransparency || workspace.accessibilityDisplayShouldIncreaseContrast
+        let opacity = style == "glass" && !opaque ? PopupAppearance.opacity : 1
+        tone.layer?.backgroundColor = NSColor(calibratedWhite: dark ? 0.16 : 0.985, alpha: opacity).cgColor
+        outline.strokeColor = NSColor.black.withAlphaComponent(dark ? 0.3 : 0.13).cgColor
+        innerRim.strokeColor = NSColor.white.withAlphaComponent(dark ? 0.14 : 0.62).cgColor
+    }
+
     func animateReveal() {
         guard let layer else{return}
         layer.removeAnimation(forKey:"lookupReveal")
