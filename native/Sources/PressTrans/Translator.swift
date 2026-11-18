@@ -35,32 +35,19 @@ struct Translator {
         let (bytes,response)=try await session.bytes(for:request)
         guard let http=response as? HTTPURLResponse else { throw TranslationFailure.network }
         guard http.statusCode==200 else { throw http.statusCode==401 || http.statusCode==403 ? TranslationFailure.auth : http.statusCode==429 ? TranslationFailure.rateLimit : TranslationFailure.network }
-        var parser=SSEParser(), answer=StreamedAnswer(), finishReason:String?, lastUpdate=Date.distantPast
-        var lineBytes: [UInt8] = []
-        for try await byte in bytes {
-            try Task.checkCancellation()
-            if byte != 10 {
-                lineBytes.append(byte)
-                guard lineBytes.count <= 65536 else { throw TranslationFailure.incomplete }
-                continue
+        let text: String
+        do {
+            text = try await withTaskCancellationHandler {
+                try await CompletionStream.read(bytes, usage: &record.usage, onText: onText)
+            } onCancel: {
+                session.invalidateAndCancel()
             }
-            if lineBytes.last == 13 { lineBytes.removeLast() }
-            let line = String(decoding: lineBytes, as: UTF8.self)
-            lineBytes.removeAll(keepingCapacity: true)
-            guard let data=parser.line(line) else { continue }
-            if data=="[DONE]" { break }
-            let event=try CompletionChunk(data:data)
-            if let usage=event.usage {record.usage=usage}
-            if let chunk=event.content {
-                guard answer.append(chunk) else { throw TranslationFailure.incomplete }
-                if Date().timeIntervalSince(lastUpdate)>0.04 { await onText(answer.text); lastUpdate=Date() }
-            }
-            // Drain through the final usage chunk even when the answer hit the output limit.
-            if let reason=event.finishReason {finishReason=reason}
+        } catch CompletionStream.Failure.incomplete {
+            throw TranslationFailure.incomplete
         }
         try Task.checkCancellation()
-        guard finishReason=="stop", !answer.text.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty else { throw TranslationFailure.incomplete }
-        await onText(answer.text)
+        await onText(text)
+        try Task.checkCancellation()
         record.status="completed"
         await UsageHistory.shared.save(record)
         await onRecord(record)

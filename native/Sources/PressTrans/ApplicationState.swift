@@ -30,7 +30,7 @@ import PressTransCore
                     let began=Date()
                     let image=try await SCScreenshotManager.captureImage(contentFilter:SCContentFilter(desktopIndependentWindow:window),configuration:config)
                     acceptanceImage=NSImage(cgImage:image,size:NSSize(width:320,height:130))
-                    let result=try await Task.detached {try ScreenTextRecognizer.recognize(image:image,region:region,point:point)}.value
+                    let result=try await Task.detached {try await ScreenTextRecognizer.recognize(image:image,region:region,point:point)}.value
                     captureStatus="窗口 OCR · \(Int(Date().timeIntervalSince(began)*1000)) ms\n目标：\(result.word)\n上下文：\(result.line)";return
                 }
                 let result=try await Task.detached {

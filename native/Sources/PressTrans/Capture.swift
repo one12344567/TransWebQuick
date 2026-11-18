@@ -16,10 +16,12 @@ enum CaptureFailure: LocalizedError {
 }
 final class TextCapture {
     static func value(_ element: AXUIElement, _ key: String) -> CFTypeRef? {
+        guard !Task.isCancelled else { return nil }
         var value: CFTypeRef?
         return AXUIElementCopyAttributeValue(element, key as CFString, &value) == .success ? value : nil
     }
     static func capture(processID:pid_t, appName:String, point:CGPoint?=nil) throws -> CaptureResult {
+        try Task.checkCancellation()
         guard AXIsProcessTrusted() else { throw CaptureFailure.permission }
         let root = AXUIElementCreateApplication(processID)
         AXUIElementSetMessagingTimeout(root, 0.3)
@@ -28,6 +30,7 @@ final class TextCapture {
             if AXUIElementCopyElementAtPosition(root,Float(point.x),Float(point.y),&hit) == .success {
                 var candidate=hit
                 for _ in 0..<24 {
+                    try Task.checkCancellation()
                     guard let element=candidate else{break}
                     try rejectSecure(element)
                     if let result=try captureMarkers(element,processID:processID,appName:appName,point:point) {return result}
@@ -40,9 +43,11 @@ final class TextCapture {
                 }
             }
         }
+        try Task.checkCancellation()
         guard let focusedValue=value(root,kAXFocusedUIElementAttribute),CFGetTypeID(focusedValue)==AXUIElementGetTypeID() else{throw CaptureFailure.unsupported}
         var focused:AXUIElement?=(focusedValue as! AXUIElement)
         for _ in 0..<24 {
+            try Task.checkCancellation()
             guard let element=focused else{break}
             try rejectSecure(element)
             if let result=try captureMarkers(element,processID:processID,appName:appName,point:point) {return result}
@@ -58,6 +63,8 @@ final class TextCapture {
         if (value(element,kAXSubroleAttribute) as? String)==kAXSecureTextFieldSubrole {throw CaptureFailure.secure}
     }
     private static func parameter(_ element:AXUIElement,_ name:String,_ argument:CFTypeRef)->CFTypeRef? {
+        // A synchronous AX call already in progress can finish. Skip all subsequent IPC.
+        guard !Task.isCancelled else { return nil }
         var result:CFTypeRef?
         return AXUIElementCopyParameterizedAttributeValue(element,name as CFString,argument,&result) == .success ? result:nil
     }
@@ -76,7 +83,7 @@ final class TextCapture {
         let deadline=Date().addingTimeInterval(0.35)
         var found:CaptureResult?,queries=0
         text.enumerateSubstrings(in:text.startIndex..<text.endIndex,options:.byWords) {word,wordRange,_,stop in
-            guard queries<96,Date()<deadline else{stop=true;return}
+            guard !Task.isCancelled,queries<96,Date()<deadline else{stop=true;return}
             queries+=1
             let ns=NSRange(wordRange,in:text)
             var range=CFRange(location:ns.location,length:ns.length)
@@ -98,7 +105,7 @@ final class TextCapture {
         let deadline=Date().addingTimeInterval(0.06)
         var boxes:[CGRect]=[],valid=true
         text.enumerateSubstrings(in:text.startIndex..<text.endIndex,options:.byComposedCharacterSequences){_,part,_,stop in
-            guard Date()<deadline else{valid=false;stop=true;return}
+            guard !Task.isCancelled,Date()<deadline else{valid=false;stop=true;return}
             if text[part].allSatisfy(\.isWhitespace){return}
             let relative=NSRange(part,in:text)
             var glyph=CFRange(location:range.location+relative.location,length:relative.length)
@@ -197,9 +204,8 @@ final class TextCapture {
                 rangeValue=AXValueCreate(.cfRange,&range);hasRange=true
             }
         }
-        if (selected?.isEmpty ?? true), hasRange, range.length > 0 {
-            var output: CFTypeRef?
-            if AXUIElementCopyParameterizedAttributeValue(focused, kAXStringForRangeParameterizedAttribute as CFString, rangeValue!, &output) == .success { selected = output as? String }
+        if (selected?.isEmpty ?? true), hasRange, range.length > 0, let rangeValue {
+            selected = parameter(focused, kAXStringForRangeParameterizedAttribute, rangeValue) as? String
         }
         guard let selected, !selected.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw CaptureFailure.noSelection }
         var surrounding: String?
@@ -210,8 +216,7 @@ final class TextCapture {
             let end = min(count ?? range.location + range.length, range.location + range.length + 1200)
             var contextRange = CFRange(location: start, length: max(0, end - start))
             if let argument = AXValueCreate(.cfRange, &contextRange) {
-                var output: CFTypeRef?
-                if AXUIElementCopyParameterizedAttributeValue(focused, kAXStringForRangeParameterizedAttribute as CFString, argument, &output) == .success { surrounding = output as? String }
+                surrounding = parameter(focused, kAXStringForRangeParameterizedAttribute, argument) as? String
             }
         }
         // Only read full values of reasonably-sized text controls.
@@ -220,12 +225,8 @@ final class TextCapture {
         }
         guard let context = ContextBuilder.make(selection: selected, surrounding: surrounding, sourceApp: appName) else { throw CaptureFailure.noSelection }
         var anchor: CGRect?
-        if hasRange, let rangeValue {
-            var result: CFTypeRef?
-            if AXUIElementCopyParameterizedAttributeValue(focused, kAXBoundsForRangeParameterizedAttribute as CFString, rangeValue, &result) == .success, let result, CFGetTypeID(result) == AXValueGetTypeID() {
-                var rect = CGRect.zero
-                if AXValueGetValue(result as! AXValue, .cgRect, &rect), rect.width > 0 { anchor = rect }
-            }
+        if hasRange, let rangeValue, let bounds = rect(focused, rangeValue), bounds.width > 0 {
+            anchor = bounds
         }
         if let point,let anchor,!anchor.insetBy(dx:-1,dy:-1).contains(point) {throw CaptureFailure.unsupported}
         let fragments=hasRange ? lineRects(focused,range:range,text:selected,fallback:anchor):[]

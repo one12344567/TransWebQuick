@@ -16,9 +16,7 @@ final class LookupPanel:NSPanel {
     private var observers:[NSObjectProtocol]=[]
     private var visibility=UUID()
     private var changes:AnyCancellable?
-    private var hasTextAnchor=false
-    private var presentationArea=CGRect.zero
-    private var visibleBounds=CGRect.zero
+    private var placement: LookupPlacement?
     private var lastDisclosure=[false,false,false]
     private var panelHeight:CGFloat=154
     private var displayLink:CADisplayLink?
@@ -31,7 +29,6 @@ final class LookupPanel:NSPanel {
     private var menuTracking=false
     private var surface:LookupSurface!
     private let highlight=WordHighlight()
-    private var placedBelow=true
     private var showTask:Task<Void,Never>?
     private func desiredHeight() -> CGFloat {
         func height(_ text:String,_ font:NSFont,spacing:CGFloat=0)->CGFloat {
@@ -54,21 +51,16 @@ final class LookupPanel:NSPanel {
             result+=sections.reduce(0,+)+CGFloat(sections.count)*14
         }
         if !model.message.isEmpty && !model.loading && (model.expanded || model.answer.isEmpty) {result+=14+height(model.message,.systemFont(ofSize:12))}
-        return min(max(result,154),min(model.expanded ? 560:320,visibleBounds.height-40))
-    }
-    private func targetFrame() -> NSRect {
-        let area=presentationArea, bounds=visibleBounds
-        let height=panelHeight+(hasTextAnchor ? LookupSurface.tip:0)
-        let y=placedBelow ? area.minY-height-6:area.maxY+6
-        let frame=NSRect(x:min(max(area.midX-190,bounds.minX+12),bounds.maxX-392),y:min(max(y,bounds.minY+12),bounds.maxY-height-12),width:380,height:height)
-        return frame
+        return min(max(result, LookupPlacement.minimumBodyHeight),
+                   model.expanded ? LookupPlacement.expandedBodyLimit : 320)
     }
     private func resize() {
-        guard panel.isVisible,!dismissing else{return}
+        guard panel.isVisible,!dismissing,let placement else{return}
         let disclosure=[model.expanded,model.contextExpanded,model.dictionaryExpanded]
         let interactive=lastDisclosure != disclosure
         var height=desiredHeight()
         if model.loading && !interactive {height=max(CGFloat(heightMotion.target),ceil(height/16)*16)}
+        height=min(height,placement.maximumBodyHeight)
         guard interactive || abs(height-CGFloat(heightMotion.target))>1 else{return}
         lastDisclosure=disclosure
         heightMotion.retarget(Double(height));detailMotion.retarget(model.expanded ? 1:0)
@@ -92,6 +84,7 @@ final class LookupPanel:NSPanel {
         }
     }
     private func applyLayout() {
+        guard let placement else { return }
         applyingPresentation=true
         CATransaction.begin();CATransaction.setDisableActions(true)
         var transaction=Transaction(animation:nil);transaction.disablesAnimations=true
@@ -101,7 +94,7 @@ final class LookupPanel:NSPanel {
                                                           dictionary: min(1, max(0, dictionaryMotion.value)))
             if model.disclosure != progress { model.disclosure = progress }
             panelHeight=heightMotion.value
-            let frame = targetFrame()
+            let frame = placement.frame(bodyHeight: panelHeight)
             if panel.frame != frame { panel.setFrame(frame, display: false) }
             surface.layoutSubtreeIfNeeded()
         }
@@ -168,24 +161,24 @@ final class LookupPanel:NSPanel {
     func show(anchor:CGRect?=nil,highlightRects:[CGRect]=[]) {
         showTask?.cancel();stopLayout();visibility=UUID();dismissing=false
         let screens = NSScreen.screens
-        guard let primary = screens.first else { hide(); return }
+        guard let primary = screens.first else { hide(); model.clear(); return }
         let textArea = anchor.map { HighlightGeometry.appKitRect($0, primaryTop: primary.frame.maxY) }
-        hasTextAnchor = textArea != nil
-        presentationArea = textArea ?? CGRect(origin: NSEvent.mouseLocation, size: .zero)
-        let screen = screens.first { $0.frame.intersects(presentationArea) || $0.frame.contains(presentationArea.origin) } ?? primary
-        visibleBounds = screen.visibleFrame
+        let area = textArea ?? CGRect(origin: NSEvent.mouseLocation, size: .zero)
+        let midpoint = CGPoint(x: area.midX, y: area.midY)
+        let screen = screens.first { $0.frame.contains(midpoint) } ?? screens.first { $0.frame.intersects(area) } ?? primary
+        let placement = LookupPlacement(anchor: area, screen: screen.visibleFrame, tip: textArea == nil ? 0 : LookupSurface.tip)
+        self.placement = placement
         startDismissalMonitors()
-        panelHeight=desiredHeight();lastDisclosure=[model.expanded,model.contextExpanded,model.dictionaryExpanded]
+        panelHeight=min(desiredHeight(),placement.maximumBodyHeight);lastDisclosure=[model.expanded,model.contextExpanded,model.dictionaryExpanded]
         heightMotion.snap(panelHeight);detailMotion.snap(model.expanded ? 1:0)
         contextMotion.snap(model.contextExpanded ? 1:0);dictionaryMotion.snap(model.dictionaryExpanded ? 1:0)
         model.disclosure = .init(detail:detailMotion.value,context:contextMotion.value,dictionary:dictionaryMotion.value)
         if let area=textArea {
-            placedBelow=area.minY-visibleBounds.minY >= min(400,panelHeight)+20
             let fragments=highlightRects.isEmpty ? [area]:highlightRects.map{HighlightGeometry.appKitRect($0,primaryTop:primary.frame.maxY)}
             highlight.show(rects:fragments)
-        } else {placedBelow=true;highlight.hide()}
-        let target=targetFrame(), reduce=NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-        surface.pointsUp=placedBelow
+        } else {highlight.hide()}
+        let target=placement.frame(bodyHeight:panelHeight), reduce=NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        surface.pointsUp=placement.below
         surface.pointerX=textArea.map { $0.midX-target.minX }
         panel.orderOut(nil);panel.alphaValue=0
         panel.setFrame(target,display:false)
@@ -209,7 +202,7 @@ final class LookupPanel:NSPanel {
         guard !dismissing, globalMonitor != nil || localMonitor != nil || showTask != nil || panel.isVisible else { return }
         stopDismissalMonitors()
         dismissing=true;showTask?.cancel();showTask=nil;stopLayout();highlight.hide()
-        guard panel.isVisible else {visibility=UUID();model.cancel();return}
+        guard panel.isVisible else {visibility=UUID();model.clear();return}
         model.cancel(); let id=UUID(); visibility=id
         NSAnimationContext.runAnimationGroup({ context in
             context.duration=NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0:0.10

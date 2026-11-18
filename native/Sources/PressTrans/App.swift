@@ -87,8 +87,18 @@ import PressTransCore
         }
         captureTask=Task {
             do {
+                try Task.checkCancellation()
                 let result:CaptureResult
-                do {result=try await Task.detached(priority:.userInitiated){try TextCapture.capture(processID:pid,appName:name,point:axPoint)}.value}
+                do {
+                    let reader = Task.detached(priority: .userInitiated) {
+                        try TextCapture.capture(processID: pid, appName: name, point: axPoint)
+                    }
+                    result = try await withTaskCancellationHandler {
+                        try await reader.value
+                    } onCancel: {
+                        reader.cancel()
+                    }
+                }
                 catch CaptureFailure.secure {throw CaptureFailure.secure}
                 catch CaptureFailure.permission {throw CaptureFailure.permission}
                 catch {
@@ -100,16 +110,17 @@ import PressTransCore
                 state.captureStatus="\(result.context.sourceApp) · \(result.context.limited ? "仅目标文字":"含上下文") · \(Int(Date().timeIntervalSince(began)*1000)) ms\n\(result.context.selection.prefix(80))"
                 panel.model.show(result.context);panel.show(anchor:result.anchor,highlightRects:result.highlightRects)
             } catch {
-                guard !Task.isCancelled else{return}
+                guard !Task.isCancelled, NSWorkspace.shared.frontmostApplication?.processIdentifier == pid else{return}
                 state.captureStatus="\(name)：\(error.localizedDescription)"
                 panel.model.clear();panel.model.message=error.localizedDescription;panel.show()
             }
         }
     }
-    @objc func preview() { panel.model.demo();panel.show() }
+    @objc func preview() { captureTask?.cancel();panel.model.demo();panel.show() }
     @objc func settings() { showWindow(manual:false) }
     @objc func manual() { showWindow(manual:true) }
     func showWindow(manual:Bool) {
+        captureTask?.cancel()
         if window == nil {
             window=NSWindow(contentRect:NSRect(x:0,y:0,width:700,height:480),styleMask:[.titled,.closable,.miniaturizable,.resizable],backing:.buffered,defer:false)
             window?.minSize=NSSize(width:660,height:450)

@@ -111,7 +111,7 @@ struct LookupView: View {
                     if !parts.meaning.isEmpty {
                         Text(parts.meaning).font(.system(size:PopupAppearance.size,weight:.medium,design:PopupAppearance.design)).foregroundStyle(PopupAppearance.ink(dark:popupStyle == "graphite" || colorScheme == .dark)).lineSpacing(3).textSelection(.enabled).fixedSize(horizontal:false,vertical:true).frame(maxWidth:.infinity,alignment:.leading)
                     }
-                    LookupDisclosure(progress:model.disclosure.detail) {
+                    LookupDisclosure(progress:model.disclosure.detail, isExpanded:model.expanded) {
                       VStack(alignment:.leading,spacing:14) {
                         if !parts.explanation.isEmpty {Text(parts.explanation).font(.system(size:max(12,PopupAppearance.size*0.7),design:PopupAppearance.design)).foregroundStyle(.secondary).lineSpacing(4).textSelection(.enabled).frame(maxWidth:.infinity,alignment:.leading)}
                         if !model.matchNote.isEmpty {Text(model.matchNote).font(.system(size:11)).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)}
@@ -120,7 +120,7 @@ struct LookupView: View {
                             Button(action:model.toggleDictionary) {
                                 HStack(spacing:6){Text(L("词典参考"));Image(systemName:"chevron.right").font(.system(size:9,weight:.semibold)).rotationEffect(.degrees(model.disclosure.dictionary*90));Spacer()}.font(.system(size:12)).foregroundStyle(.secondary).padding(.horizontal,6).frame(maxWidth:.infinity,minHeight:32,alignment:.leading).contentShape(Rectangle())
                             }.buttonStyle(LookupButtonStyle()).accessibilityValue(model.dictionaryExpanded ? L("已展开"):L("已收起"))
-                            LookupDisclosure(progress:model.disclosure.dictionary) {
+                            LookupDisclosure(progress:model.disclosure.dictionary, isExpanded:model.dictionaryExpanded) {
                               VStack(alignment:.leading,spacing:8) {
                                 Text(model.dictionaryText).font(.system(size:12)).foregroundStyle(.secondary).lineSpacing(4).textSelection(.enabled).frame(maxWidth:.infinity,alignment:.leading)
                                 Text(model.dictionaryNote).font(.system(size:11)).foregroundStyle(.tertiary).fixedSize(horizontal:false,vertical:true)
@@ -133,7 +133,7 @@ struct LookupView: View {
                             Button(action:model.toggleContext) {
                                 HStack(spacing:6){Text(L("上下文"));Image(systemName:"chevron.right").font(.system(size:9,weight:.semibold)).rotationEffect(.degrees(model.disclosure.context*90));Spacer()}.font(.system(size:12)).foregroundStyle(.secondary).padding(.horizontal,6).frame(maxWidth:.infinity,minHeight:32,alignment:.leading).contentShape(Rectangle())
                             }.buttonStyle(LookupButtonStyle()).accessibilityValue(model.contextExpanded ? L("已展开"):L("已收起"))
-                            LookupDisclosure(progress:model.disclosure.context) {
+                            LookupDisclosure(progress:model.disclosure.context, isExpanded:model.contextExpanded) {
                               VStack(alignment:.leading,spacing:8) {
                                 if !model.source.isEmpty && !model.preview {Text(model.source + (model.limited ? " · " + L("上下文有限"):"")).font(.system(size:11)).foregroundStyle(.tertiary)}
                                 Text(model.context).font(.system(size:12)).foregroundStyle(.secondary).lineSpacing(4).textSelection(.enabled).frame(maxWidth:.infinity,alignment:.leading)
@@ -148,7 +148,8 @@ struct LookupView: View {
                       }.padding(.top,14)
                     }
                     if !model.message.isEmpty && !model.loading {
-                        LookupDisclosure(progress:model.answer.isEmpty ? 1:model.disclosure.detail) {
+                        LookupDisclosure(progress:model.answer.isEmpty ? 1:model.disclosure.detail,
+                                         isExpanded:model.answer.isEmpty || model.expanded) {
                             Text(model.message).font(.system(size:12)).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true).padding(.top,14)
                         }
                     }

@@ -5,6 +5,7 @@ import PressTransCore
     static func main() async throws {
         try await checkUsage()
         checkDisclosureMotion()
+        checkLookupPlacement()
         try await checkGlyphHighlight()
         let converted=HighlightGeometry.appKitRect(CGRect(x:-300,y:200,width:35,height:18),primaryTop:900)
         precondition(converted==CGRect(x:-300,y:682,width:35,height:18))
@@ -54,6 +55,7 @@ import PressTransCore
         precondition(parser.line(": heartbeat")==nil);precondition(parser.line("")==nil)
         precondition(parser.line("data: [DONE]")==nil);precondition(parser.line("")=="[DONE]")
         checkStreamedAnswer()
+        try await checkLookupInterruptions()
         print("4 Swift core checks passed: context budget, limited input, answer hierarchy, SSE framing")
         if let path = ProcessInfo.processInfo.environment["PRESSTRANS_DICTIONARY"] {
             let dictionary = try OfflineDictionary(path:path)

@@ -1,6 +1,5 @@
 import AppKit
 import ScreenCaptureKit
-import Vision
 import PressTransCore
 
 enum ScreenTextFailure:LocalizedError {
@@ -27,8 +26,8 @@ actor ScreenTextCapture {
         let image=try await SCScreenshotManager.captureImage(in:region)
         try Task.checkCancellation()
         let result:(word:String,line:String,rect:CGRect)
-        do {result=try autoreleasepool {try ScreenTextRecognizer.recognize(image:image,region:region,point:point)}}
-        catch {throw ScreenTextFailure.noText}
+        do {result=try await ScreenTextRecognizer.recognize(image:image,region:region,point:point)}
+        catch {try Task.checkCancellation();throw ScreenTextFailure.noText}
         try Task.checkCancellation()
         guard let context=ContextBuilder.make(selection:result.word,surrounding:result.line,sourceApp:appName+L(" · 屏幕识字")) else{throw ScreenTextFailure.noText}
         return CaptureResult(context:context,anchor:result.rect,processID:processID)

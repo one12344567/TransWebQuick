@@ -13,12 +13,16 @@ private struct DisclosureLayout:Layout {
 }
 struct LookupDisclosure<Content:View>:View {
     let progress:CGFloat
+    let isExpanded:Bool
     @ViewBuilder var content:()->Content
     var body:some View {
         if progress>0 {
-          DisclosureLayout(progress:progress){content()}
-            .clipped().contentShape(Rectangle())
-            .allowsHitTesting(progress>0.95).accessibilityHidden(progress<0.95)
+            DisclosureLayout(progress:progress){content()}
+                .clipped()
+                // The outer layout owns this shape, so unrevealed rows cannot intercept a click.
+                .contentShape(.interaction, Rectangle())
+                .allowsHitTesting(isExpanded)
+                .accessibilityHidden(!isExpanded)
         }
     }
 }

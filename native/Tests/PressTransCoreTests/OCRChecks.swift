@@ -1,7 +1,7 @@
 import AppKit
 import PressTransCore
 
-@MainActor func checkOCR() throws {
+@MainActor func checkOCR() async throws {
     let bitmap=NSBitmapImageRep(bitmapDataPlanes:nil,pixelsWide:960,pixelsHigh:240,bitsPerSample:8,samplesPerPixel:4,hasAlpha:true,isPlanar:false,colorSpaceName:.deviceRGB,bytesPerRow:0,bitsPerPixel:0)!
     NSGraphicsContext.saveGraphicsState()
     NSGraphicsContext.current=NSGraphicsContext(bitmapImageRep:bitmap)
@@ -16,13 +16,22 @@ import PressTransCore
     let width=("limits" as NSString).size(withAttributes:attributes).width
     let point=CGPoint(x:region.minX+(40+offset+width/2)/2,y:region.minY+(240-130-font.ascender/2)/2)
     let start=Date()
-    let result=try ScreenTextRecognizer.recognize(image:image,region:region,point:point)
+    let result=try await ScreenTextRecognizer.recognize(image:image,region:region,point:point)
     precondition(result.word=="limits", "Wrong OCR target: \(result.word)")
     precondition(result.line.contains("Higher DM limits") && result.rect.contains(point))
     print("OCR raster check passed: limits, exact word bounds, line context, Retina / negative screen origin [\(Int(Date().timeIntervalSince(start)*1000)) ms]")
     do {
-        _=try ScreenTextRecognizer.recognize(image:image,region:region,point:CGPoint(x:-795,y:125))
+        _=try await ScreenTextRecognizer.recognize(image:image,region:region,point:CGPoint(x:-795,y:125))
         preconditionFailure("Blank area must not return a nearby word")
     } catch ScreenTextRecognizer.RecognitionFailure.noText {}
     print("OCR blank-area rejection passed")
+    let superseded = Task {
+        withUnsafeCurrentTask { $0?.cancel() }
+        return try await ScreenTextRecognizer.recognize(image:image, region:region, point:point)
+    }
+    do {
+        _ = try await superseded.value
+        preconditionFailure("Superseded captures must stop before entering Vision")
+    } catch is CancellationError {}
+    print("Superseded OCR cancellation passed")
 }
